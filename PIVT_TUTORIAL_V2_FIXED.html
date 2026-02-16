@@ -497,6 +497,16 @@
                 return `${durationText}${windowText}`.trim();
             };
 
+            const formatTimeLeft=(ms)=>{
+                const safe=Math.max(0,Math.floor(ms/1000));
+                const h=Math.floor(safe/3600);
+                const m=Math.floor((safe%3600)/60);
+                const sec=safe%60;
+                if(h>0)return `${h}h ${m}m`;
+                if(m>0)return `${m}m ${sec}s`;
+                return `${sec}s`;
+            };
+
             const tiers=[
                 {id:0,season:1,name:'HUMAN',color:'from-gray-400 to-gray-600',icon:'👤',xpPerLvl:1000},
                 {id:1,season:1,name:'NOVICE',color:'from-green-400 to-green-600',icon:'🎓',xpPerLvl:1500},
@@ -802,6 +812,15 @@
                 const payload=JSON.stringify(data);
                 S.set(`user-${user}-data`,payload);
                 S.set(`user-${user}-data-backup`,payload);
+            };
+
+            const completeTutorial=()=>{
+                setShowTutorial(false);
+                setTutorialCompleted(true);
+                setTutorialStep(0);
+                if(user){
+                    setTimeout(()=>saveData(),0);
+                }
             };
 
             const getWeekStart=()=>{
@@ -2847,7 +2866,7 @@ ${item.xpBoost}x XP + ${item.coinBoost}x Coins for ${Math.round(item.duration/60
                                     <div className="flex gap-2">
                                         <button onClick={()=>setTutorialStep(0)} className="px-3 py-1 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm">Restart</button>
                                         <button onClick={()=>setTutorialStep(5)} className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm">Quick Guide</button>
-                                        <button onClick={()=>setShowTutorial(false)} className="px-3 py-1 rounded-lg bg-red-700 hover:bg-red-600 text-sm">Close</button>
+                                        <button onClick={completeTutorial} className="px-3 py-1 rounded-lg bg-red-700 hover:bg-red-600 text-sm">Finish</button>
                                     </div>
                                 </div>
                                 {tutorialStep===0&&(
@@ -2871,9 +2890,7 @@ ${item.xpBoost}x XP + ${item.coinBoost}x Coins for ${Math.round(item.duration/60
                                                 START INTERACTIVE TUTORIAL 🎮
                                             </button>
                                             <button onClick={()=>{
-                                                setShowTutorial(false);
-                                                setTutorialCompleted(true);
-                                                saveData();
+                                                completeTutorial();
                                             }} className="w-full py-2 rounded-xl font-bold text-sm bg-gray-700 hover:bg-gray-600 transition-all text-gray-300">
                                                 Skip Tutorial
                                             </button>
@@ -3102,9 +3119,7 @@ ${item.xpBoost}x XP + ${item.coinBoost}x Coins for ${Math.round(item.duration/60
                                                 ← Back
                                             </button>
                                             <button onClick={()=>{
-                                                setShowTutorial(false);
-                                                setTutorialCompleted(true);
-                                                saveData();
+                                                completeTutorial();
                                             }} className="flex-1 py-3 rounded-xl font-bold text-xl bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 hover:opacity-90 transition-all animate-pulse shadow-lg">
                                                 START MY JOURNEY! 🚀
                                             </button>
@@ -3119,10 +3134,7 @@ ${item.xpBoost}x XP + ${item.coinBoost}x Coins for ${Math.round(item.duration/60
                                             <h2 className="text-4xl font-bold text-red-400 mb-4">Error</h2>
                                             <p className="text-xl text-white mb-6">Something went wrong with the tutorial.</p>
                                             <button onClick={()=>{
-                                                setShowTutorial(false);
-                                                setTutorialCompleted(true);
-                                                setTutorialStep(0);
-                                                saveData();
+                                                completeTutorial();
                                             }} className="w-full py-3 rounded-xl font-bold bg-gray-700 hover:bg-gray-600 transition-all">
                                                 Close Tutorial
                                             </button>
@@ -3154,6 +3166,17 @@ ${item.xpBoost}x XP + ${item.coinBoost}x Coins for ${Math.round(item.duration/60
                                 <button onClick={()=>setShowShop(true)} className="p-3 rounded-xl bg-yellow-500 hover:bg-yellow-400 transition-all text-black animate-glow"><Shop/></button>
                             </div>
                         </div>
+
+                        {activeBoosters.length>0&&<div className="mb-6 bg-gray-800/80 border border-cyan-500 rounded-2xl p-4">
+                            <h3 className="font-bold text-cyan-300 mb-3">⚡ Active Boosters Details</h3>
+                            <div className="grid md:grid-cols-2 gap-2">
+                                {activeBoosters.filter(b=>b&&b.expires>Date.now()).map(b=><div key={b.id||`${b.type}-${b.expires}`} className="bg-gray-900 rounded-lg p-3 text-sm">
+                                    <p className="font-bold text-white">{normalizeBoosterType(b.type)==='xp'?`${b.boost}x XP`:`${b.boost}x Coins`}</p>
+                                    <p className="text-cyan-300">Time left: {formatTimeLeft(b.expires-Date.now())}</p>
+                                    {b.activeWindow&&<p className="text-purple-300 text-xs">Window: {getBoosterWindowLabel(b.activeWindow)}</p>}
+                                </div>)}
+                            </div>
+                        </div>}
 
                         <div className={`bg-gradient-to-br ${ct.color} p-1 rounded-2xl mb-6 shadow-xl animate-neon-pulse ${currentBorder?borderStyles[currentBorder]:''}`}>
                             <div className="bg-gray-900 rounded-xl p-6">
@@ -3322,7 +3345,7 @@ ${item.xpBoost}x XP + ${item.coinBoost}x Coins for ${Math.round(item.duration/60
                             </div>
                         </div>
 
-                        {showShop&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4"><div className="bg-gray-800 rounded-2xl max-w-6xl w-full h-screen border border-gray-700 animate-scaleIn flex flex-col"><div className="sticky top-0 bg-gradient-to-b from-gray-800 via-gray-800 to-transparent pb-6 pt-8 px-8 z-50 backdrop-blur-sm shadow-2xl border-b-2 border-purple-500"><div className="flex items-center justify-between mb-4"><h2 className="text-4xl font-bold flex items-center gap-2"><Shop/><span>Shop</span></h2><button onClick={()=>setShowShop(false)} className="p-2 rounded-xl bg-gray-700 hover:bg-gray-600 transition-all"><X/></button></div><div className="flex gap-2 flex-wrap">{rarities.map((r,i)=><button key={i} onClick={()=>setShopFilter(i)} className={`px-4 py-2 rounded-lg font-bold transition-all ${shopFilter===i?`bg-gradient-to-r ${r.c}`:'bg-gray-700 hover:bg-gray-600'}`}>{r.n}</button>)}</div></div><div className="flex-1 overflow-y-auto px-8 pb-8 scrollbar-hide"><div className="grid md:grid-cols-3 gap-4 pt-4">{shopItems.filter(item=>item.rarity===shopFilter&&(!item.season||item.season<=season)).map(item=>{const r=rarities[item.rarity];const locked=tier<(item.minT||0)||lvl<(item.minL||1);const isOwned=owned.includes(item.id);const isBooster=item.type==='xp_boost'||item.type==='coin_boost'||item.type==='combo_boost';const shouldBlur=item.rarity>=5&&locked;return<div key={item.id} className={`bg-gray-700 rounded-xl p-4 border-3 transition-all ${shouldBlur?'blur-sm':''} ${locked?'opacity-50':''}`} style={{borderWidth:'3px',borderStyle:'solid',borderImage:`linear-gradient(to right, ${r.c.replace('from-','').replace('to-',',')}) 1`}}><div className={`w-full h-2 rounded-full bg-gradient-to-r ${r.c} mb-3`}></div><div className="flex items-center justify-between mb-3"><div className="flex items-center gap-3"><span className="text-4xl">{item.icon||item.char}</span><div><p className="font-bold">{shouldBlur?'???':item.n}</p>{!shouldBlur&&isBooster&&<p className="text-[11px] text-cyan-300 mt-1">⏱ {getBoosterTimingText(item)}</p>}<p className={`text-xs bg-gradient-to-r ${r.c} bg-clip-text text-transparent font-bold`}>{r.n}</p></div></div><div className="text-right"><p className="text-2xl font-bold text-yellow-400">{shouldBlur?'???':item.price} 💰</p></div></div>{locked&&<p className="text-red-400 text-sm mb-2">🔒 {shouldBlur?'Locked - Reach Higher Tier to Reveal':`Requires ${tiers[item.minT||0].name}${item.minL>1?` Level ${item.minL}`:''}`}</p>}{isOwned&&!isBooster?<div className="bg-green-600 text-center py-2 rounded-lg font-bold">✓ Owned</div>:<button onClick={()=>buyItem(item)} disabled={locked} className={`w-full py-2 rounded-lg font-bold ${locked?'bg-gray-600 cursor-not-allowed':'bg-gradient-to-r from-yellow-500 to-orange-500 hover:opacity-90'}`}>{locked?'🔒 Locked':'Buy'}</button>}</div>})}{shopFilter===10&&<div className="bg-gray-700 rounded-xl p-4 border-3" style={{borderWidth:'3px',borderStyle:'solid',borderImage:'linear-gradient(to right, rgb(168, 85, 247), rgb(236, 72, 153)) 1'}}><div className="w-full h-2 rounded-full bg-gradient-to-r from-purple-400 to-purple-500 mb-3"></div><div className="flex items-center justify-between mb-3"><div className="flex items-center gap-3"><span className="text-4xl">🛡️</span><div><p className="font-bold">Streak Saver</p><p className="text-xs text-purple-400 font-bold">Special Item</p></div></div><p className="text-2xl font-bold text-yellow-400">1000 💰</p></div><p className="text-sm text-gray-400 mb-2">Save your streak! (1x per week)</p>{stats.streakSaverUsedThisWeek?<div className="bg-gray-600 text-center py-2 rounded-lg font-bold">Used This Week</div>:<button onClick={buyStreakSaver} className="w-full py-2 rounded-lg font-bold bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90">Buy & Use</button>}</div>}</div></div></div></div>}
+                        {showShop&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4"><div className="bg-gray-800 rounded-2xl max-w-6xl w-full h-screen border border-gray-700 animate-scaleIn flex flex-col"><div className="sticky top-0 bg-gradient-to-b from-gray-800 via-gray-800 to-transparent pb-6 pt-8 px-8 z-50 backdrop-blur-sm shadow-2xl border-b-2 border-purple-500"><div className="flex items-center justify-between mb-4"><h2 className="text-4xl font-bold flex items-center gap-2"><Shop/><span>Shop</span></h2><button onClick={()=>setShowShop(false)} className="p-2 rounded-xl bg-gray-700 hover:bg-gray-600 transition-all"><X/></button></div><div className="flex gap-2 flex-wrap">{rarities.map((r,i)=><button key={i} onClick={()=>setShopFilter(i)} className={`px-4 py-2 rounded-lg font-bold transition-all ${shopFilter===i?`bg-gradient-to-r ${r.c}`:'bg-gray-700 hover:bg-gray-600'}`}>{r.n}</button>)}</div></div><div className="flex-1 overflow-y-auto px-8 pb-8 scrollbar-hide"><div className="grid md:grid-cols-3 gap-4 pt-4">{shopItems.filter(item=>item.rarity===shopFilter&&(!item.season||item.season<=season)).map(item=>{const r=rarities[item.rarity];const locked=tier<(item.minT||0)||lvl<(item.minL||1);const isOwned=owned.includes(item.id);const isBooster=item.type==='xp_boost'||item.type==='coin_boost'||item.type==='combo_boost';const shouldBlur=item.rarity>=5&&locked;return<div key={item.id} className={`bg-gray-700 rounded-xl p-4 border-3 transition-all ${shouldBlur?'blur-sm':''} ${locked?'opacity-50':''}`} style={{borderWidth:'3px',borderStyle:'solid',borderImage:`linear-gradient(to right, ${r.c.replace('from-','').replace('to-',',')}) 1`}}><div className={`w-full h-2 rounded-full bg-gradient-to-r ${r.c} mb-3`}></div><div className="flex items-center justify-between mb-3"><div className="flex items-center gap-3"><span className="text-4xl">{item.icon||item.char}</span><div><p className="font-bold">{shouldBlur?'???':item.n}</p>{!shouldBlur&&isBooster&&<><p className="text-[11px] text-cyan-300 mt-1">⏱ {getBoosterTimingText(item)}</p>{item.season&&<p className="text-[11px] text-purple-300">Season {item.season}+ booster</p>}</>}<p className={`text-xs bg-gradient-to-r ${r.c} bg-clip-text text-transparent font-bold`}>{r.n}</p></div></div><div className="text-right"><p className="text-2xl font-bold text-yellow-400">{shouldBlur?'???':item.price} 💰</p></div></div>{locked&&<p className="text-red-400 text-sm mb-2">🔒 {shouldBlur?'Locked - Reach Higher Tier to Reveal':`Requires ${tiers[item.minT||0].name}${item.minL>1?` Level ${item.minL}`:''}`}</p>}{isOwned&&!isBooster?<div className="bg-green-600 text-center py-2 rounded-lg font-bold">✓ Owned</div>:<button onClick={()=>buyItem(item)} disabled={locked} className={`w-full py-2 rounded-lg font-bold ${locked?'bg-gray-600 cursor-not-allowed':'bg-gradient-to-r from-yellow-500 to-orange-500 hover:opacity-90'}`}>{locked?'🔒 Locked':'Buy'}</button>}</div>})}{shopFilter===10&&<div className="bg-gray-700 rounded-xl p-4 border-3" style={{borderWidth:'3px',borderStyle:'solid',borderImage:'linear-gradient(to right, rgb(168, 85, 247), rgb(236, 72, 153)) 1'}}><div className="w-full h-2 rounded-full bg-gradient-to-r from-purple-400 to-purple-500 mb-3"></div><div className="flex items-center justify-between mb-3"><div className="flex items-center gap-3"><span className="text-4xl">🛡️</span><div><p className="font-bold">Streak Saver</p><p className="text-xs text-purple-400 font-bold">Special Item</p></div></div><p className="text-2xl font-bold text-yellow-400">1000 💰</p></div><p className="text-sm text-gray-400 mb-2">Save your streak! (1x per week)</p>{stats.streakSaverUsedThisWeek?<div className="bg-gray-600 text-center py-2 rounded-lg font-bold">Used This Week</div>:<button onClick={buyStreakSaver} className="w-full py-2 rounded-lg font-bold bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90">Buy & Use</button>}</div>}</div></div></div></div>}
 
                         {showFocus&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 p-4">
                             <div className="bg-gray-800 rounded-2xl p-8 max-w-3xl w-full border-2 border-purple-500 animate-scaleIn max-h-screen overflow-y-auto scrollbar-hide">
