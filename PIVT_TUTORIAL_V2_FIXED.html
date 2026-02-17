@@ -67,6 +67,24 @@
         .animate-overdue-pulse{animation:overduePulse 2s ease-in-out infinite}
         .animate-edit-shake{animation:editShake 0.3s ease-in-out}
         .animate-priority-glow{animation:priorityGlow 2s ease-in-out infinite}
+        @keyframes floatSoft{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+        @keyframes neonPulse{0%,100%{box-shadow:0 0 0 rgba(34,211,238,0)}50%{box-shadow:0 0 24px rgba(34,211,238,.35)}}
+        .animate-float-soft{animation:floatSoft 4s ease-in-out infinite}
+        .animate-neon-pulse{animation:neonPulse 2.6s ease-in-out infinite}
+        @keyframes rewardBurst{0%{transform:scale(.2) rotate(-10deg);opacity:0}60%{transform:scale(1.15) rotate(5deg);opacity:1}100%{transform:scale(1) rotate(0);opacity:1}}
+        @keyframes megaFlash{0%,100%{filter:brightness(1)}50%{filter:brightness(1.8)}}
+        .animate-reward-burst{animation:rewardBurst .8s cubic-bezier(.22,.8,.2,1) forwards}
+        .animate-mega-flash{animation:megaFlash 1.8s ease-in-out infinite}
+        @keyframes cardPopIn{0%{transform:translateY(20px) scale(.96);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}
+        @keyframes pageEnter{0%{opacity:0;transform:translateY(12px) scale(.995)}100%{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes homeOrb{0%,100%{transform:translateY(0) translateX(0) scale(1)}50%{transform:translateY(-12px) translateX(8px) scale(1.08)}}
+        @keyframes textSheen{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+        .animate-card-pop{animation:cardPopIn .45s ease-out both}
+        .animate-soft-pulse{animation:pulse 1.8s ease-in-out infinite}
+        .animate-page-enter{animation:pageEnter .5s ease-out both}
+        .animate-home-orb{animation:homeOrb 7s ease-in-out infinite}
+        .animate-text-sheen{background-size:200% 200%;animation:textSheen 4s ease infinite}
+
     </style>
     </head>
 <body>
@@ -85,7 +103,7 @@
     </div>
     <style>@keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}</style>
     <script type="text/babel">
-        const {useState,useEffect}=React;
+        const {useState,useEffect,useRef}=React;
         const I=({d,children})=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{d?<path d={d}/>:children}</svg>;
         const Check=()=><I><polyline points="20 6 9 17 4 12"/></I>;
         const Plus=()=><I><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></I>;
@@ -135,7 +153,7 @@
                     if(e.name==='QuotaExceededError'){
                         // Storage full - clean old activity logs
                         console.warn('Storage quota exceeded, cleaning old data...');
-                        this.cleanOldData();
+                        S.cleanOldData();
                         try{
                             localStorage.setItem(k,v);
                             return{k,v};
@@ -372,10 +390,11 @@
             const [lastActivity,setLastActivity]=useState(Date.now());
             const [sessionTimeout,setSessionTimeout]=useState(null);
             const [authMode,setAuthMode]=useState('welcome');
-            const [authForm,setAuthForm]=useState({username:'',email:'',password:'',confirmPassword:''});
+            const [authForm,setAuthForm]=useState({username:'',email:'',password:'',confirmPassword:'',otp:''});
             const [showPass,setShowPass]=useState(false);
             const [authErr,setAuthErr]=useState('');
             const [resetMsg,setResetMsg]=useState('');
+            const [forgotOtpMeta,setForgotOtpMeta]=useState(null);
             const [tasks,setTasks]=useState([]);
             const [xp,setXp]=useState(0);
             const [totalXp,setTotalXp]=useState(0);
@@ -415,12 +434,15 @@
             const [showBattle,setShowBattle]=useState(false);
             const [battleTab,setBattleTab]=useState('friends');
             const [leaderboard,setLeaderboard]=useState([]);
+            const detectedTimeZone=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';
             const [countdownTick,setCountdownTick]=useState(0);
+            const [timeZone,setTimeZone]=useState(detectedTimeZone);
             const [editingTask,setEditingTask]=useState(null);
             const [showSeasonComplete,setShowSeasonComplete]=useState(null);
-            const [spotifyConnected,setSpotifyConnected]=useState(false);
-            const [spotifyPlaying,setSpotifyPlaying]=useState(false);
-            const [currentTrack,setCurrentTrack]=useState(null);
+            const [musicEnabled,setMusicEnabled]=useState(false);
+            const [musicPlaying,setMusicPlaying]=useState(false);
+            const [musicVolume,setMusicVolume]=useState(70);
+            const [selectedTrackIndex,setSelectedTrackIndex]=useState(0);
             const [deletedTasks,setDeletedTasks]=useState([]);
             const [showDeletedTasks,setShowDeletedTasks]=useState(false);
             const [taskAnimation,setTaskAnimation]=useState({});
@@ -432,16 +454,77 @@
             const [breakDuration,setBreakDuration]=useState(5);
             const [focusMode,setFocusMode]=useState('work');
             const [focusSessions,setFocusSessions]=useState(0);
+            const [activeFocusConfig,setActiveFocusConfig]=useState({focusMinutes:25,breakMinutes:5});
             const [showPrizeWheel,setShowPrizeWheel]=useState(false);
             const [wheelSpinning,setWheelSpinning]=useState(false);
             const [wheelResult,setWheelResult]=useState(null);
+            const [showWheelRewardModal,setShowWheelRewardModal]=useState(false);
             const [wheelTier,setWheelTier]=useState(1);
+            const [epicRedeemAnim,setEpicRedeemAnim]=useState(null);
             const [habits,setHabits]=useState([]);
             const [showHabits,setShowHabits]=useState(false);
             const [newHabit,setNewHabit]=useState({name:'',frequency:'daily',reminderTime:'09:00',icon:'✓'});
             const [goals,setGoals]=useState([]);
             const [showGoals,setShowGoals]=useState(false);
             const [newGoal,setNewGoal]=useState({title:'',description:'',priority:3,targetDate:'',category:'personal'});
+            const focusTimerRef=useRef(null);
+            const focusEndAtRef=useRef(0);
+            const audioRef=useRef(null);
+
+            const focusTracks=[
+                {name:'Morning Energy',artist:'Audio Library',url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'},
+                {name:'Calm Workspace',artist:'Audio Library',url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3'},
+                {name:'Deep Concentration',artist:'Audio Library',url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3'},
+                {name:'Night Study',artist:'Audio Library',url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3'},
+                {name:'Ambient Flow',artist:'Audio Library',url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3'}
+            ];
+
+            const normalizeBoosterType=(type)=>{
+                if(type==='xp'||type==='xp_boost')return'xp';
+                if(type==='coin'||type==='coin_boost')return'coin';
+                return type;
+            };
+
+            const isBoosterWindowActive=(booster)=>{
+                if(!booster?.activeWindow)return true;
+                const hour=new Date().getHours();
+                if(booster.activeWindow==='morning')return hour>=5&&hour<12;
+                if(booster.activeWindow==='afternoon')return hour>=12&&hour<18;
+                if(booster.activeWindow==='evening')return hour>=18&&hour<24;
+                if(booster.activeWindow==='night')return hour>=0&&hour<5;
+                return true;
+            };
+
+            const getBoosterWindowLabel=(windowKey)=>{
+                if(windowKey==='morning')return '05:00-11:59';
+                if(windowKey==='afternoon')return '12:00-17:59';
+                if(windowKey==='evening')return '18:00-23:59';
+                if(windowKey==='night')return '00:00-04:59';
+                return 'Any time';
+            };
+
+            const formatBoosterDuration=(ms)=>{
+                if(!ms)return'';
+                const hours=ms/3600000;
+                if(Number.isInteger(hours))return `${hours}h`;
+                return `${hours.toFixed(1)}h`;
+            };
+
+            const getBoosterTimingText=(item)=>{
+                const durationText=formatBoosterDuration(item.duration);
+                const windowText=item.activeWindow?` • ${getBoosterWindowLabel(item.activeWindow)}`:'';
+                return `${durationText}${windowText}`.trim();
+            };
+
+            const formatTimeLeft=(ms)=>{
+                const safe=Math.max(0,Math.floor(ms/1000));
+                const h=Math.floor(safe/3600);
+                const m=Math.floor((safe%3600)/60);
+                const sec=safe%60;
+                if(h>0)return `${h}h ${m}m`;
+                if(m>0)return `${m}m ${sec}s`;
+                return `${sec}s`;
+            };
 
             const tiers=[
                 {id:0,season:1,name:'HUMAN',color:'from-gray-400 to-gray-600',icon:'👤',xpPerLvl:1000},
@@ -616,7 +699,19 @@
                 {id:'s6_title_infinity',n:'INFINITY BEING',type:'title',icon:'♾️',title:'INFINITY BEING',rarity:10,price:1000000,season:6},
                 {id:'s6_theme_void',n:'Void Essence',type:'theme',icon:'🌑',theme:{p:'from-black via-indigo-950 via-purple-900 to-black',s:'from-black via-indigo-950 via-purple-950 to-black',n:'Void Essence',anim:'animate-cosmic-glow animate-pulse'},rarity:10,price:700000,season:6},
                 {id:'s6_theme_infinity',n:'INFINITY COSMOS',type:'theme',icon:'♾️',theme:{p:'from-purple-400 via-pink-500 via-cyan-400 via-blue-500 to-purple-600',s:'from-purple-500 via-pink-600 via-cyan-500 via-blue-600 to-purple-700',n:'INFINITY COSMOS',anim:'animate-rainbow animate-cosmic-glow animate-hue-rotate animate-sparkle animate-color-pulse'},rarity:10,price:2000000,season:6},
-                {id:'s6_border_infinity',n:'INFINITY BORDER',type:'border',icon:'♾️♾️♾️',border:'infinity',rarity:10,price:1500000,season:6}
+                {id:'s6_border_infinity',n:'INFINITY BORDER',type:'border',icon:'♾️♾️♾️',border:'infinity',rarity:10,price:1500000,season:6},
+                {id:'boost_morning_xp',n:'Morning XP Rush',type:'xp_boost',icon:'🌅',rarity:10,price:3200,duration:2*60*60*1000,boost:1.5,activeWindow:'morning',season:1,description:'1.5x XP for 2 hours in the morning'},
+                {id:'boost_afternoon_coin',n:'Afternoon Coin Wave',type:'coin_boost',icon:'☀️',rarity:10,price:3600,duration:2*60*60*1000,boost:1.5,activeWindow:'afternoon',season:1,description:'1.5x Coins for 2 hours in the afternoon'},
+                {id:'boost_evening_focus',n:'Evening Focus XP',type:'xp_boost',icon:'🌆',rarity:10,price:5600,duration:3*60*60*1000,boost:2,activeWindow:'evening',season:2,description:'2x XP for 3 hours in the evening'},
+                {id:'boost_night_owl',n:'Night Owl Coins',type:'coin_boost',icon:'🌙',rarity:10,price:6500,duration:3*60*60*1000,boost:2.5,activeWindow:'night',season:3,description:'2.5x Coins for 3 hours at night'},
+                {id:'boost_full_day_combo',n:'Anytime Combo Boost',type:'combo_boost',icon:'🧪',rarity:10,price:14000,duration:2*60*60*1000,xpBoost:2,coinBoost:2,season:2,description:'2x XP + 2x Coins for 2 hours (any time)'},
+                {id:'boost_s4_storm',n:'Season Storm Boost',type:'xp_boost',icon:'🌩️',rarity:10,price:24000,duration:2*60*60*1000,boost:4,activeWindow:'evening',season:4,description:'4x XP for 2 hours (Season 4+) evening burst'},
+                {id:'boost_s5_overdrive',n:'Overdrive Coins',type:'coin_boost',icon:'🔥',rarity:10,price:38000,duration:3*60*60*1000,boost:6,activeWindow:'night',season:5,description:'6x Coins for 3 hours (Season 5+) night mode'},
+                {id:'boost_s6_infinity_combo',n:'Infinity Combo',type:'combo_boost',icon:'♾️',rarity:10,price:90000,duration:3*60*60*1000,xpBoost:10,coinBoost:10,season:6,description:'10x XP + 10x Coins for 3 hours (Season 6+)'},
+                {id:'boost_budget_focus',n:'Budget Focus Booster',type:'xp_boost',icon:'🪙',rarity:10,price:600,duration:6*60*60*1000,boost:1.2,description:'1.2x XP for 6 hours (cheap + long)'},
+                {id:'boost_budget_coin',n:'Budget Coin Booster',type:'coin_boost',icon:'💸',rarity:10,price:650,duration:6*60*60*1000,boost:1.2,description:'1.2x Coins for 6 hours (cheap + long)'},
+                {id:'boost_student_pack',n:'Student Saver Pack',type:'combo_boost',icon:'🎒',rarity:10,price:900,duration:4*60*60*1000,xpBoost:1.3,coinBoost:1.3,description:'1.3x XP + 1.3x Coins for 4 hours'},
+                {id:'boost_endurance_xp',n:'Endurance XP',type:'xp_boost',icon:'⏳',rarity:10,price:1200,duration:12*60*60*1000,boost:1.5,description:'1.5x XP for 12 hours'}
             ];
 
             const achList=[
@@ -672,9 +767,20 @@
             ];
 
             const loadData=(u)=>{
-                const d=S.get(`user-${u}-data`);
-                if(d?.value){
-                    const data=JSON.parse(d.value);
+                const primary=S.get(`user-${u}-data`);
+                const backup=S.get(`user-${u}-data-backup`);
+                const rawData=primary?.value||backup?.value;
+                if(!rawData)return;
+                
+                try{
+                    const data=JSON.parse(rawData);
+                    const sanitizedBoosters=(data.activeBoosters||[])
+                        .filter(b=>b&&b.expires>Date.now())
+                        .map(b=>({
+                            ...b,
+                            type:normalizeBoosterType(b.type)
+                        }));
+
                     setTasks(data.tasks||[]);
                     setXp(data.xp||0);
                     setTotalXp(data.totalXp||0);
@@ -687,7 +793,7 @@
                     setStats(data.stats||{tasksCompleted:0,currentStreak:0,longestStreak:0,lastTaskDate:null,lastLoginDate:null,streakSaverUsedThisWeek:false,weekStartDate:null});
                     setOwned(data.owned||[]);
                     setAchs(data.achs||[]);
-                    setActiveBoosters(data.activeBoosters||[]);
+                    setActiveBoosters(sanitizedBoosters);
                     setCurrentTitle(data.currentTitle||'');
                     setCurrentBorder(data.currentBorder||'');
                     setCurrentEffect(data.currentEffect||'');
@@ -701,6 +807,12 @@
                     setHabits(data.habits||[]);
                     setGoals(data.goals||[]);
                     setTutorialCompleted(data.tutorialCompleted||false);
+                    setTimeZone(data.timeZone||detectedTimeZone);
+                    
+                    if(!primary?.value&&backup?.value){
+                        S.set(`user-${u}-data`,backup.value);
+                        logActivity('account_recovery',{source:'backup_restore'});
+                    }
                     
                     // Show tutorial for first-time users
                     if(!data.tutorialCompleted){
@@ -709,13 +821,30 @@
                             setTutorialStep(0);
                         },500);
                     }
+                }catch(e){
+                    console.error('Failed to load user data:',e);
+                    alert('⚠️ Could not load saved game data. Your account still exists, but progress data may be corrupted.');
                 }
             };
 
             const saveData=()=>{
                 if(!user)return;
-                const data={tasks,xp,totalXp,coins,lvl,tier,season,charIdx,theme,stats,owned,achs,activeBoosters,currentTitle,currentBorder,currentEffect,specialChars,customThemes,activityLog,friends,friendRequests,challenges,tradeOffers,habits,goals,tutorialCompleted};
-                S.set(`user-${user}-data`,JSON.stringify(data));
+                const sanitizedBoosters=activeBoosters
+                    .filter(b=>b&&b.expires>Date.now())
+                    .map(b=>({...b,type:normalizeBoosterType(b.type)}));
+                const data={tasks,xp,totalXp,coins,lvl,tier,season,charIdx,theme,stats,owned,achs,activeBoosters:sanitizedBoosters,currentTitle,currentBorder,currentEffect,specialChars,customThemes,activityLog,friends,friendRequests,challenges,tradeOffers,habits,goals,tutorialCompleted,timeZone};
+                const payload=JSON.stringify(data);
+                S.set(`user-${user}-data`,payload);
+                S.set(`user-${user}-data-backup`,payload);
+            };
+
+            const completeTutorial=()=>{
+                setShowTutorial(false);
+                setTutorialCompleted(true);
+                setTutorialStep(0);
+                if(user){
+                    setTimeout(()=>saveData(),0);
+                }
             };
 
             const getWeekStart=()=>{
@@ -732,24 +861,127 @@
                     setStats(p=>({...p,weekStartDate:ws,streakSaverUsedThisWeek:false}));
                 }
                 if(stats.lastLoginDate!==today){
-                    const bonus=owned.includes('ability_double')?100:50;
+                    const loginStreak=(stats.lastLoginDate===new Date(Date.now()-86400000).toDateString())?(stats.currentStreak||0):0;
+                    const baseBonus=50+(Math.min(30,loginStreak)*10);
+                    const seasonalBonus=season*25;
+                    const bonus=(owned.includes('ability_double')?2:1)*(baseBonus+seasonalBonus);
                     setCoins(p=>p+bonus);
                     showCoinAnim(bonus);
                     setStats(p=>({...p,lastLoginDate:today}));
+
+                    // Daily login habit tracker (auto-record attendance)
+                    setHabits(prev=>prev.map(h=>{
+                        const lastDay=h.lastLoginTracked?new Date(h.lastLoginTracked).toDateString():null;
+                        const missedDays=lastDay?Math.max(0,Math.floor((Date.now()-h.lastLoginTracked)/(24*60*60*1000))-1):0;
+                        const adjustedStreak=missedDays>0?0:(h.loginStreak||0);
+                        if(lastDay===today)return h;
+                        return {
+                            ...h,
+                            loginStreak:adjustedStreak+1,
+                            bestLoginStreak:Math.max(h.bestLoginStreak||0,adjustedStreak+1),
+                            loginCompletions:(h.loginCompletions||0)+1,
+                            lastLoginTracked:Date.now()
+                        };
+                    }));
                 }
                 const now=Date.now();
-                setActiveBoosters(prev=>prev.filter(b=>b.expires>now));
+                setActiveBoosters(prev=>prev.filter(b=>b&&b.expires>now).map(b=>({...b,type:normalizeBoosterType(b.type)})));
+            };
+
+            const generateSecureOtp=()=>{
+                const arr=new Uint32Array(1);
+                window.crypto.getRandomValues(arr);
+                return String((arr[0]%900000)+100000).padStart(6,'0');
+            };
+
+            const generateOtpSalt=()=>{
+                const bytes=new Uint8Array(16);
+                window.crypto.getRandomValues(bytes);
+                return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+            };
+
+            const hashOtp=(otp,email,username,salt)=>hashPassword(`${otp}-${email}-${username}`,salt);
+
+            const getPasswordChecklist=(password)=>({
+                length:password&&password.length>=8,
+                upper:/[A-Z]/.test(password||''),
+                lower:/[a-z]/.test(password||''),
+                number:/[0-9]/.test(password||'')
+            });
+
+            const sendForgotOtp=()=>{
+                setAuthErr('');
+                setResetMsg('');
+                const username=sanitizeInput(authForm.username,20);
+                const email=sanitizeInput(authForm.email,120).toLowerCase();
+                if(!username||!email)return setAuthErr('Enter username and email first');
+
+                const accountKey=getAccountKeyByUsername(username);
+                const acc=accountKey?S.get(accountKey):null;
+                if(!acc?.value)return setAuthErr('Account not found');
+                const a=JSON.parse(acc.value);
+                if((a.email||'').toLowerCase()!==email)return setAuthErr('Email doesn\'t match account');
+
+                if(forgotOtpMeta&&forgotOtpMeta.sentAt&&(Date.now()-forgotOtpMeta.sentAt)<60000){
+                    return setAuthErr('Please wait before requesting another OTP');
+                }
+
+                const otp=generateSecureOtp();
+                const salt=generateOtpSalt();
+                const expires=Date.now()+(10*60*1000);
+                const otpHash=hashOtp(otp,email,username,salt);
+                setForgotOtpMeta({otpHash,salt,expires,attempts:0,username,email,sentAt:Date.now()});
+                setResetMsg('✅ OTP generated. Check your email inbox (demo: OTP shown in popup). Expires in 10 minutes.');
+                alert(`🔐 Your secure OTP is: ${otp}
+
+For production, this should be delivered by backend email service.`);
+            };
+
+            const getAccountKeyByUsername=(username)=>{
+                const normalized=(username||'').toLowerCase();
+                if(!normalized)return null;
+                for(let i=0;i<localStorage.length;i++){
+                    const key=localStorage.key(i);
+                    if(key&&key.endsWith('-account')){
+                        const uname=key.replace('user-','').replace('-account','');
+                        if((uname||'').toLowerCase()===normalized)return key;
+                    }
+                }
+                return null;
+            };
+
+            const getAnyAccountByEmail=(email)=>{
+                const normalized=(email||'').toLowerCase();
+                if(!normalized)return null;
+                for(let i=0;i<localStorage.length;i++){
+                    const key=localStorage.key(i);
+                    if(key&&key.endsWith('-account')){
+                        try{
+                            const acc=JSON.parse(localStorage.getItem(key));
+                            if((acc.email||'').toLowerCase()===normalized)return {key,acc};
+                        }catch(e){}
+                    }
+                }
+                return null;
+            };
+
+            const triggerEpicRedeem=(title,message)=>{
+                const key=Date.now();
+                setEpicRedeemAnim({key,title,message});
+                setTimeout(()=>setEpicRedeemAnim(null),3000);
             };
 
             const signup=()=>{
                 setAuthErr('');
+                const username=sanitizeInput(authForm.username,20);
+                const email=sanitizeInput(authForm.email,120).toLowerCase();
                 
                 // Validate username
-                const usernameCheck=validateUsername(authForm.username);
+                const usernameCheck=validateUsername(username);
                 if(!usernameCheck.valid)return setAuthErr(usernameCheck.error);
                 
                 // Validate email
-                const emailCheck=validateEmail(authForm.email);
+                const emailCheck=validateEmail(email);
                 if(!emailCheck.valid)return setAuthErr(emailCheck.error);
                 
                 // Validate password
@@ -760,7 +992,7 @@
                 if(authForm.password!==authForm.confirmPassword)return setAuthErr('Passwords do not match');
                 
                 // Check if username exists
-                if(S.get(`user-${authForm.username}-account`)?.value)return setAuthErr('Username already taken');
+                if(getAccountKeyByUsername(username))return setAuthErr('Username already taken (case-insensitive)');
                 
                 // Check if email exists
                 try{
@@ -768,7 +1000,7 @@
                         const key=localStorage.key(i);
                         if(key&&key.endsWith('-account')){
                             const acc=JSON.parse(localStorage.getItem(key));
-                            if(acc.email===authForm.email)return setAuthErr('Email already registered');
+                            if((acc.email||'').toLowerCase()===email)return setAuthErr('Email already registered');
                         }
                     }
                 }catch(e){
@@ -778,8 +1010,8 @@
                 // Hash password and create account
                 const hashedPassword=hashPassword(authForm.password);
                 const accountData={
-                    username:authForm.username,
-                    email:authForm.email,
+                    username,
+                    email,
                     password:hashedPassword,
                     createdAt:new Date().toISOString(),
                     lastLogin:new Date().toISOString(),
@@ -787,33 +1019,36 @@
                     accountStatus:'active'
                 };
                 
-                S.set(`user-${authForm.username}-account`,JSON.stringify(accountData));
-                S.set('current-user',authForm.username);
-                setUser(authForm.username);
-                setAuthForm({username:'',email:'',password:'',confirmPassword:''});
+                S.set(`user-${username}-account`,JSON.stringify(accountData));
+                S.set('current-user',username);
+                setUser(username);
+                setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''});
                 
                 // Log signup
                 setTimeout(()=>{
-                    logActivity('account_created',{email:authForm.email.substring(0,2)+'***'});
+                    logActivity('account_created',{email:email.substring(0,2)+'***'});
                 },100);
             };
 
             const login=()=>{
                 setAuthErr('');
-                if(!authForm.username||!authForm.password)return setAuthErr('Fill all fields');
+                const username=sanitizeInput(authForm.username,20);
+                if(!username||!authForm.password)return setAuthErr('Fill all fields');
                 
                 // Check rate limiting
-                const rateCheck=checkRateLimit(authForm.username);
+                const rateCheck=checkRateLimit(username.toLowerCase());
                 if(!rateCheck.allowed)return setAuthErr(rateCheck.error);
                 
-                // Check account exists
-                const acc=S.get(`user-${authForm.username}-account`);
+                // Case-insensitive account lookup
+                const accountKey=getAccountKeyByUsername(username);
+                const acc=accountKey?S.get(accountKey):null;
                 if(!acc?.value){
-                    recordLoginAttempt(authForm.username,false);
+                    recordLoginAttempt(username.toLowerCase(),false);
                     return setAuthErr('Invalid username or password');
                 }
                 
                 const a=JSON.parse(acc.value);
+                const canonicalUsername=(a.username||username);
                 
                 // Check account status
                 if(a.accountStatus==='suspended')return setAuthErr('Account suspended');
@@ -824,7 +1059,7 @@
                 const passwordMatch=a.password===inputHashed||a.password===authForm.password;
                 
                 if(!passwordMatch){
-                    recordLoginAttempt(authForm.username,false);
+                    recordLoginAttempt(username.toLowerCase(),false);
                     return setAuthErr('Invalid username or password');
                 }
                 
@@ -837,14 +1072,14 @@
                 // Update account info
                 a.lastLogin=new Date().toISOString();
                 a.loginCount=(a.loginCount||0)+1;
-                S.set(`user-${authForm.username}-account`,JSON.stringify(a));
+                S.set(accountKey||`user-${canonicalUsername}-account`,JSON.stringify(a));
                 
                 // Successful login
-                recordLoginAttempt(authForm.username,true);
-                S.set('current-user',authForm.username);
-                setUser(authForm.username);
-                loadData(authForm.username);
-                setAuthForm({username:'',email:'',password:'',confirmPassword:''});
+                recordLoginAttempt(username.toLowerCase(),true);
+                S.set('current-user',canonicalUsername);
+                setUser(canonicalUsername);
+                loadData(canonicalUsername);
+                setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''});
                 
                 // Log login
                 setTimeout(()=>{
@@ -855,30 +1090,46 @@
             const forgotPass=()=>{
                 setAuthErr('');
                 setResetMsg('');
-                
-                if(!authForm.username||!authForm.email)return setAuthErr('Enter username and email');
-                
-                // Validate new password
+                const username=sanitizeInput(authForm.username,20);
+                const email=sanitizeInput(authForm.email,120).toLowerCase();
+                const otp=sanitizeInput(authForm.otp,10);
+
+                if(!username||!email)return setAuthErr('Enter username and email');
+                if(!otp||otp.length!==6)return setAuthErr('Enter the 6-digit OTP');
+
+                if(!forgotOtpMeta)return setAuthErr('Generate an OTP first');
+                if(forgotOtpMeta.username!==username||forgotOtpMeta.email!==email)return setAuthErr('OTP is tied to a different account request');
+                if(Date.now()>forgotOtpMeta.expires)return setAuthErr('OTP expired. Request a new OTP');
+                if((forgotOtpMeta.attempts||0)>=5)return setAuthErr('Too many OTP attempts. Request a new OTP');
+
+                const expectedHash=hashOtp(otp,email,username,forgotOtpMeta.salt);
+                if(expectedHash!==forgotOtpMeta.otpHash){
+                    setForgotOtpMeta(prev=>prev?{...prev,attempts:(prev.attempts||0)+1}:prev);
+                    return setAuthErr('Invalid OTP code');
+                }
+
                 const passwordCheck=validatePassword(authForm.password);
                 if(!passwordCheck.valid)return setAuthErr(passwordCheck.error);
-                
-                const acc=S.get(`user-${authForm.username}-account`);
+
+                const accountKey=getAccountKeyByUsername(username);
+                const acc=accountKey?S.get(accountKey):null;
                 if(!acc?.value)return setAuthErr('Account not found');
-                
+
                 const a=JSON.parse(acc.value);
-                if(a.email!==authForm.email)return setAuthErr('Email doesn\'t match account');
-                
-                // Hash new password
+                if((a.email||'').toLowerCase()!==email)return setAuthErr('Email doesn\'t match account');
+
                 a.password=hashPassword(authForm.password);
                 a.passwordResetDate=new Date().toISOString();
-                S.set(`user-${authForm.username}-account`,JSON.stringify(a));
-                
+                a.passwordResetMethod='otp';
+                S.set(accountKey||`user-${username}-account`,JSON.stringify(a));
+
+                setForgotOtpMeta(null);
                 setResetMsg('✅ Password reset successfully! You can now login.');
                 setTimeout(()=>{
                     setAuthMode('login');
                     setResetMsg('');
-                    setAuthForm({username:'',email:'',password:'',confirmPassword:''});
-                },2500);
+                    setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''});
+                },2200);
             };
 
             const logout=()=>{
@@ -898,6 +1149,7 @@
                 setCurrentBorder('');
                 setCurrentEffect('');
                 setSpecialChars([]);
+                setTimeZone(detectedTimeZone);
                 setAuthMode('welcome');
             };
 
@@ -1142,7 +1394,7 @@
             },[]);
 
             useEffect(()=>{if(user)checkStreaks()},[user]);
-            useEffect(()=>{if(user)saveData()},[tasks,xp,totalXp,coins,lvl,tier,season,charIdx,theme,stats,owned,achs,activeBoosters,currentTitle,currentBorder,currentEffect,specialChars,customThemes,activityLog,friends,friendRequests,challenges,tradeOffers,habits,goals,user]);
+            useEffect(()=>{if(user)saveData()},[tasks,xp,totalXp,coins,lvl,tier,season,charIdx,theme,stats,owned,achs,activeBoosters,currentTitle,currentBorder,currentEffect,specialChars,customThemes,activityLog,friends,friendRequests,challenges,tradeOffers,habits,goals,timeZone,user]);
             
             // Session timeout monitoring
             useEffect(()=>{
@@ -1177,14 +1429,18 @@
                 };
             },[user]);
             
-            // Cleanup focus timer on unmount
+            // Cleanup focus timer + audio on unmount
             useEffect(()=>{
                 return()=>{
-                    if(focusTimer){
-                        clearInterval(focusTimer);
+                    if(focusTimerRef.current){
+                        clearInterval(focusTimerRef.current);
+                    }
+                    if(audioRef.current){
+                        audioRef.current.pause();
+                        audioRef.current.src='';
                     }
                 };
-            },[focusTimer]);
+            },[]);
 
             // Keyboard shortcuts
             useEffect(()=>{
@@ -1222,7 +1478,7 @@
                             signup();
                         }
                         // Forgot password form
-                        else if(authMode==='forgot'&&authForm.username&&authForm.email&&authForm.password&&!user){
+                        else if(authMode==='forgot'&&authForm.username&&authForm.email&&authForm.password&&authForm.otp&&!user){
                             e.preventDefault();
                             forgotPass();
                         }
@@ -1239,7 +1495,7 @@
 
             useEffect(()=>{
                 const interval=setInterval(()=>{
-                    setActiveBoosters(prev=>prev.filter(b=>b.expires>Date.now()));
+                    setActiveBoosters(prev=>prev.filter(b=>b&&b.expires>Date.now()).map(b=>({...b,type:normalizeBoosterType(b.type)})));
                 },1000);
                 return ()=>clearInterval(interval);
             },[]);
@@ -1274,23 +1530,80 @@
                 setTimeout(()=>setXpAnim(null),1000);
             };
             
+            const getSafeDate=(raw)=>{
+                const dt=new Date(raw);
+                return Number.isNaN(dt.getTime())?null:dt;
+            };
+
+            const getTimeZoneChoices=()=>{
+                const defaults=['UTC','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Toronto','Europe/London','Europe/Berlin','Europe/Paris','Europe/Madrid','Europe/Rome','Asia/Dubai','Asia/Kolkata','Asia/Bangkok','Asia/Singapore','Asia/Tokyo','Asia/Seoul','Australia/Sydney','Pacific/Auckland'];
+                try{
+                    if(typeof Intl.supportedValuesOf==='function'){
+                        const supported=Intl.supportedValuesOf('timeZone').filter(z=>defaults.includes(z));
+                        return Array.from(new Set([detectedTimeZone,...supported,...defaults])).sort((a,b)=>a.localeCompare(b));
+                    }
+                }catch(e){}
+                return Array.from(new Set([detectedTimeZone,...defaults])).sort((a,b)=>a.localeCompare(b));
+            };
+
+            const timeZoneChoices=getTimeZoneChoices();
+
+            const formatDateTimeInZone=(rawDate,opts={})=>{
+                const dt=getSafeDate(rawDate);
+                if(!dt)return 'Invalid date';
+                return new Intl.DateTimeFormat('en-US',{timeZone,year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',...opts}).format(dt);
+            };
+
+            const getDateKeyInZone=(rawDate)=>{
+                const dt=getSafeDate(rawDate);
+                if(!dt)return '';
+                return new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(dt);
+            };
+
+            const getLocalDateTimeInput=(rawDate)=>{
+                const dt=getSafeDate(rawDate);
+                if(!dt)return '';
+                const offset=dt.getTimezoneOffset();
+                const localDate=new Date(dt.getTime()-offset*60000);
+                return localDate.toISOString().slice(0,16);
+            };
+
+            const normalizeDueDate=(input)=>{
+                if(!input)return null;
+                const parsed=getSafeDate(input);
+                return parsed?parsed.toISOString():null;
+            };
+
+            const getTimezoneClock=()=>{
+                const now=new Date(countdownTick||Date.now());
+                const pretty=formatDateTimeInZone(now,{weekday:'long',year:'numeric',month:'long',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+                const shortZone=new Intl.DateTimeFormat('en-US',{timeZone,timeZoneName:'short'}).format(now).split(' ').pop();
+                return {pretty,shortZone};
+            };
+
             const logActivity=(type,details)=>{
-                const entry={type,details,timestamp:Date.now(),date:new Date().toLocaleString()};
+                const now=new Date();
+                const entry={type,details,timestamp:Date.now(),date:formatDateTimeInZone(now,{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})};
                 setActivityLog(prev=>[entry,...prev].slice(0,100)); // Keep last 100 entries
             };
 
             const getActiveXpBoost=()=>{
-                const xpBoost=activeBoosters.find(b=>b.type==='xp_boost');
-                return xpBoost?xpBoost.boost:1;
+                const xpBoosters=activeBoosters.filter(b=>normalizeBoosterType(b.type)==='xp'&&b.expires>Date.now()&&isBoosterWindowActive(b));
+                return xpBoosters.length?Math.max(...xpBoosters.map(b=>b.boost||1)):1;
             };
 
             const getActiveCoinBoost=()=>{
-                const coinBoost=activeBoosters.find(b=>b.type==='coin_boost');
-                return coinBoost?coinBoost.boost:1;
+                const coinBoosters=activeBoosters.filter(b=>normalizeBoosterType(b.type)==='coin'&&b.expires>Date.now()&&isBoosterWindowActive(b));
+                return coinBoosters.length?Math.max(...coinBoosters.map(b=>b.boost||1)):1;
             };
 
             const calcXp=(diff,dur)=>Math.round(durs[dur].xp*diffs[diff].mult*getActiveXpBoost());
-            const calcCoins=(diff)=>Math.round(diffs[diff].coins*getActiveCoinBoost());
+            const getTaskRewardMultiplier=()=>{
+                const streakBonus=Math.min(0.35,(stats.currentStreak||0)*0.01);
+                const seasonBonus=Math.min(0.3,Math.max(0,season-1)*0.03);
+                return 1+streakBonus+seasonBonus;
+            };
+            const calcCoins=(diff)=>Math.round(diffs[diff].coins*getActiveCoinBoost()*getTaskRewardMultiplier());
             const getSeasonMultiplier=()=>{
                 if(season===1)return 1;
                 if(season===2)return 2;
@@ -1303,7 +1616,7 @@
             const getLvlXp=()=>tiers[tier].xpPerLvl*getSeasonMultiplier();
             
             const getMinDuration=(dur)=>{
-                const durations={'15min':5*60*1000,'30min':10*60*1000,'1hr':20*60*1000,'2hr':40*60*1000,'3hr':60*60*1000,'4hr':80*60*1000,'5hr':100*60*1000,'6hr+':120*60*1000,'allday':240*60*1000};
+                const durations={'15min':15*60*1000,'30min':30*60*1000,'1hr':60*60*1000,'2hr':2*60*60*1000,'3hr':3*60*60*1000,'4hr':4*60*60*1000,'5hr':5*60*60*1000,'6hr+':6*60*60*1000,'allday':12*60*60*1000};
                 return durations[dur]||0;
             };
 
@@ -1336,7 +1649,7 @@
                 
                 // Validate due date (can't be in the past)
                 if(newTask.dueDate){
-                    const dueTime=new Date(newTask.dueDate).getTime();
+                    const dueTime=(getSafeDate(newTask.dueDate)||new Date(0)).getTime();
                     if(dueTime<now){
                         const confirmPastDate=confirm(`⚠️ Due date is in the past\n\nCreate anyway?`);
                         if(!confirmPastDate)return;
@@ -1352,7 +1665,7 @@
                     completed:false,
                     createdAt:now,
                     canCompleteAt:now+getMinDuration(newTask.duration),
-                    dueDate:newTask.dueDate||null,
+                    dueDate:normalizeDueDate(newTask.dueDate),
                     priority:newTask.priority||3
                 }]);
                 setNewTask({title:'',difficulty:'medium',duration:'1hr',category:'personal',dueDate:'',priority:3});
@@ -1363,43 +1676,26 @@
 
             const getCountdown=(dueDate)=>{
                 if(!dueDate)return null;
-                const now=Date.now();
-                const due=new Date(dueDate).getTime();
-                const diff=due-now;
-                
-                if(diff<0){
-                    // Overdue
-                    const absDiff=Math.abs(diff);
-                    const seconds=Math.floor(absDiff/1000)%60;
-                    const minutes=Math.floor(absDiff/(1000*60))%60;
-                    const hours=Math.floor(absDiff/(1000*60*60))%24;
-                    const days=Math.floor(absDiff/(1000*60*60*24))%30;
-                    const months=Math.floor(absDiff/(1000*60*60*24*30))%12;
-                    const years=Math.floor(absDiff/(1000*60*60*24*365));
-                    return {overdue:true,years,months,days,hours,minutes,seconds};
-                }
-                
-                // Calculate time remaining
-                const seconds=Math.floor(diff/1000)%60;
-                const minutes=Math.floor(diff/(1000*60))%60;
-                const hours=Math.floor(diff/(1000*60*60))%24;
-                const days=Math.floor(diff/(1000*60*60*24))%30;
-                const months=Math.floor(diff/(1000*60*60*24*30))%12;
-                const years=Math.floor(diff/(1000*60*60*24*365));
-                
-                return {overdue:false,years,months,days,hours,minutes,seconds};
+                const due=getSafeDate(dueDate);
+                if(!due)return null;
+                const diffMs=due.getTime()-Date.now();
+                const overdue=diffMs<0;
+                const absSeconds=Math.floor(Math.abs(diffMs)/1000);
+                const days=Math.floor(absSeconds/86400);
+                const hours=Math.floor((absSeconds%86400)/3600);
+                const minutes=Math.floor((absSeconds%3600)/60);
+                const seconds=absSeconds%60;
+                return {overdue,days,hours,minutes,seconds,totalSeconds:absSeconds};
             };
 
             const formatCountdown=(countdown)=>{
                 if(!countdown)return'';
                 const parts=[];
-                if(countdown.years>0)parts.push(`${countdown.years}y`);
-                if(countdown.months>0)parts.push(`${countdown.months}mo`);
                 if(countdown.days>0)parts.push(`${countdown.days}d`);
-                if(countdown.hours>0)parts.push(`${countdown.hours}h`);
-                if(countdown.minutes>0)parts.push(`${countdown.minutes}m`);
-                if(countdown.seconds>0||parts.length===0)parts.push(`${countdown.seconds}s`);
-                return parts.slice(0,3).join(' ');
+                if(countdown.hours>0||countdown.days>0)parts.push(`${countdown.hours}h`);
+                if(countdown.minutes>0||countdown.days>0||countdown.hours>0)parts.push(`${countdown.minutes}m`);
+                parts.push(`${countdown.seconds}s`);
+                return parts.slice(0,4).join(' ');
             };
 
             const getPriorityColor=(priority)=>{
@@ -1618,7 +1914,7 @@
                     difficulty:t.difficulty,
                     duration:t.duration,
                     category:t.category,
-                    dueDate:t.dueDate||'',
+                    dueDate:getLocalDateTimeInput(t.dueDate),
                     priority:t.priority||3
                 });
                 
@@ -1641,7 +1937,7 @@
                     difficulty:newTask.difficulty,
                     duration:newTask.duration,
                     category:newTask.category,
-                    dueDate:newTask.dueDate||null,
+                    dueDate:normalizeDueDate(newTask.dueDate),
                     priority:newTask.priority||3,
                     xpRew:calcXp(newTask.difficulty,newTask.duration),
                     coinRew:calcCoins(newTask.difficulty)
@@ -1830,6 +2126,7 @@
                     // Apply the prize
                     applyWheelPrize(selectedPrize);
                     setWheelResult(selectedPrize);
+                    setShowWheelRewardModal(true);
                     setWheelSpinning(false);
                 },2000);
                 
@@ -1904,10 +2201,11 @@
                         const newBooster={
                             id:Date.now(),
                             boost:prize.boost,
-                            type:prize.boostType,
+                            type:normalizeBoosterType(prize.boostType),
                             expires:Date.now()+prize.duration
                         };
                         setActiveBoosters(p=>[...p,newBooster]);
+                        if(prize.boost>=10)triggerEpicRedeem('BOOST OVERLOAD!',prize.name);
                         break;
                     case'title':
                         const titleId='wheel-title-'+prize.title;
@@ -1965,7 +2263,7 @@
                             setTier(tier+1);
                             setLvl(1);
                             setCoins(p=>p+500);
-                            alert('🌟 TIER UP!!!\n\nYou instantly advanced a tier from the wheel!');
+                            triggerEpicRedeem('🌟 INSTANT TIER UP!', 'You instantly advanced a tier from the wheel!');
                         }
                         break;
                     case'doubleRewards':
@@ -2037,7 +2335,11 @@
                     longestStreak:0,
                     lastCompletedDate:null,
                     totalCompletions:0,
-                    xpPerCompletion:newHabit.frequency==='daily'?50:150
+                    xpPerCompletion:newHabit.frequency==='daily'?50:150,
+                    loginStreak:0,
+                    bestLoginStreak:0,
+                    loginCompletions:0,
+                    lastLoginTracked:null
                 };
                 
                 setHabits([...habits,habit]);
@@ -2167,57 +2469,49 @@
             // ========================
 
             const calculateAIDifficulty=(goal,userStats)=>{
-                // AI-based difficulty calculation
                 let difficulty=0;
-                
-                // Factor 1: Time given to complete (0-100 points)
+
+                // Factor 1: Time pressure
                 if(goal.targetDate){
                     const daysToComplete=Math.max(1,Math.floor((new Date(goal.targetDate)-Date.now())/(24*60*60*1000)));
-                    if(daysToComplete<=7)difficulty+=100;
+                    if(daysToComplete<=3)difficulty+=120;
+                    else if(daysToComplete<=7)difficulty+=100;
                     else if(daysToComplete<=30)difficulty+=70;
                     else if(daysToComplete<=90)difficulty+=40;
-                    else if(daysToComplete<=180)difficulty+=20;
-                    else difficulty+=10;
-                }else{
-                    difficulty+=50;
-                }
-                
-                // Factor 2: Description complexity (0-100 points)
-                const descLength=goal.description.length;
-                const words=goal.description.split(' ').length;
-                if(descLength>200||words>30)difficulty+=100;
-                else if(descLength>100||words>15)difficulty+=70;
-                else if(descLength>50||words>8)difficulty+=40;
+                    else difficulty+=20;
+                }else difficulty+=50;
+
+                // Factor 2: Description complexity + action keywords
+                const desc=(goal.description||'').trim();
+                const words=desc?desc.split(/\s+/).length:0;
+                const hardKeywords=['launch','business','certification','marathon','startup','thesis','exam','promotion','investment','build'];
+                const keywordHits=hardKeywords.filter(k=>desc.toLowerCase().includes(k)).length;
+                if(desc.length>200||words>30)difficulty+=90;
+                else if(desc.length>100||words>15)difficulty+=65;
+                else if(desc.length>50||words>8)difficulty+=40;
                 else difficulty+=20;
-                
-                // Factor 3: Priority level (0-50 points)
-                difficulty+=goal.priority*10;
-                
-                // Factor 4: User's historical completion rate (0-50 points)
+                difficulty+=keywordHits*8;
+
+                // Factor 3: Priority
+                difficulty+=goal.priority*12;
+
+                // Factor 4: Historical success rate
                 const completedGoals=goals.filter(g=>g.completed).length;
                 const totalGoals=goals.length||1;
                 const completionRate=completedGoals/totalGoals;
-                
                 if(completionRate<0.3)difficulty+=50;
                 else if(completionRate<0.5)difficulty+=30;
                 else if(completionRate<0.7)difficulty+=10;
-                // If user completes >70% of goals, no extra difficulty
-                
-                // Factor 5: Category-based multiplier
-                const categoryMultipliers={
-                    personal:1.0,
-                    work:1.2,
-                    health:1.1,
-                    learning:1.3,
-                    finance:1.4,
-                    creative:1.1
-                };
+
+                // Factor 5: active workload pressure
+                const activeGoals=goals.filter(g=>!g.completed).length;
+                difficulty+=Math.min(30,activeGoals*3);
+
+                // Factor 6: category multiplier
+                const categoryMultipliers={personal:1.0,work:1.2,health:1.1,learning:1.3,finance:1.4,creative:1.1};
                 difficulty*=(categoryMultipliers[goal.category]||1.0);
-                
-                // Normalize to 1-10 scale
-                difficulty=Math.min(10,Math.max(1,Math.round(difficulty/30)));
-                
-                return difficulty;
+
+                return Math.min(10,Math.max(1,Math.round(difficulty/28)));
             };
 
             const calculateGoalReward=(difficulty)=>{
@@ -2272,7 +2566,7 @@
                     completedAt:null,
                     aiDifficulty:difficulty,
                     coinReward,
-                    progress:0
+                    progress:0,progressHistory:[{value:0,at:Date.now(),source:'created'}]
                 };
                 
                 setGoals([...goals,goal]);
@@ -2314,7 +2608,8 @@
                     ...g,
                     completed:true,
                     completedAt:now,
-                    progress:100
+                    progress:100,
+                    progressHistory:[...(g.progressHistory||[]),{value:100,at:now,source:'completed'}]
                 }:g));
                 
                 // Award coins
@@ -2332,7 +2627,14 @@
             };
 
             const updateGoalProgress=(id,progress)=>{
-                setGoals(goals.map(g=>g.id===id?{...g,progress:Math.min(100,Math.max(0,progress))}:g));
+                setGoals(goals.map(g=>{
+                    if(g.id!==id)return g;
+                    const safe=Math.min(100,Math.max(0,progress));
+                    const enforced=Math.max(g.progress||0,safe); // no going backwards
+                    if(enforced===(g.progress||0))return g;
+                    const history=[...(g.progressHistory||[]),{value:enforced,at:Date.now(),source:'manual'}].slice(-200);
+                    return {...g,progress:enforced,progressHistory:history};
+                }));
             };
 
             const deleteGoal=(id)=>{
@@ -2348,6 +2650,64 @@
                 logActivity('goal_deleted',{goal:goal.title});
             };
 
+            useEffect(()=>{
+                if(!musicEnabled){
+                    if(audioRef.current){
+                        audioRef.current.pause();
+                        audioRef.current.src='';
+                    }
+                    setMusicPlaying(false);
+                    return;
+                }
+
+                const selectedTrack=focusTracks[selectedTrackIndex]||focusTracks[0];
+                if(!selectedTrack)return;
+
+                if(!audioRef.current){
+                    audioRef.current=new Audio();
+                    audioRef.current.loop=true;
+                }
+
+                const audio=audioRef.current;
+                if(audio.src!==selectedTrack.url){
+                    audio.src=selectedTrack.url;
+                }
+                audio.volume=Math.max(0,Math.min(1,musicVolume/100));
+
+                const handlePlay=()=>setMusicPlaying(true);
+                const handlePause=()=>setMusicPlaying(false);
+                const handleEnd=()=>setMusicPlaying(false);
+                audio.addEventListener('play',handlePlay);
+                audio.addEventListener('pause',handlePause);
+                audio.addEventListener('ended',handleEnd);
+
+                return()=>{
+                    audio.removeEventListener('play',handlePlay);
+                    audio.removeEventListener('pause',handlePause);
+                    audio.removeEventListener('ended',handleEnd);
+                };
+            },[musicEnabled,selectedTrackIndex,musicVolume]);
+
+            const toggleMusicPlayback=()=>{
+                if(!musicEnabled){
+                    setMusicEnabled(true);
+                    setTimeout(()=>toggleMusicPlayback(),0);
+                    return;
+                }
+                if(!audioRef.current)return;
+                if(audioRef.current.paused){
+                    audioRef.current.play().catch(()=>alert('⚠️ Music playback was blocked by your browser. Click Play again to allow audio.'));
+                }else{
+                    audioRef.current.pause();
+                }
+            };
+
+            const playSelectedTrack=()=>{
+                if(!musicEnabled||!audioRef.current)return;
+                audioRef.current.currentTime=0;
+                audioRef.current.play().catch(()=>{});
+            };
+
             // ========================
             // GOALS SYSTEM - END
             // ========================
@@ -2356,98 +2716,96 @@
             // FOCUS MODE - START
             // ========================
 
+            const stopFocusTimer=()=>{
+                if(focusTimerRef.current){
+                    clearInterval(focusTimerRef.current);
+                    focusTimerRef.current=null;
+                }
+                focusEndAtRef.current=0;
+                setFocusTimer(false);
+            };
+
+            const launchTimer=(mode,durationMinutes,onEnd)=>{
+                stopFocusTimer();
+                const durationSeconds=Math.max(1,Math.floor(durationMinutes*60));
+                const endAt=Date.now()+(durationSeconds*1000);
+                focusEndAtRef.current=endAt;
+                setFocusMode(mode);
+                setFocusTimeRemaining(durationSeconds);
+                setFocusTimer(true);
+
+                const tick=()=>{
+                    const secondsLeft=Math.max(0,Math.ceil((focusEndAtRef.current-Date.now())/1000));
+                    setFocusTimeRemaining(secondsLeft);
+                    if(secondsLeft<=0){
+                        stopFocusTimer();
+                        onEnd();
+                    }
+                };
+
+                tick();
+                focusTimerRef.current=setInterval(tick,250);
+            };
+
+            const startBreakSession=(breakMinutes)=>{
+                launchTimer('break',breakMinutes,()=>{
+                    alert('✅ Break over! Ready for another session?');
+                    setShowFocus(false);
+                });
+            };
+
+            const completeFocusSession=(usedFocusMinutes,usedBreakMinutes)=>{
+                setFocusSessions(prev=>prev+1);
+
+                const bonusCoins=Math.floor(usedFocusMinutes*2);
+                const bonusXp=Math.floor(usedFocusMinutes*5);
+                setCoins(p=>p+bonusCoins);
+                setXp(p=>p+bonusXp);
+                setTotalXp(p=>p+bonusXp);
+                showCoinAnim(bonusCoins);
+
+                alert(`🎉 Focus Session Complete!
+
++${bonusXp} XP
++${bonusCoins} Coins
+
+Take a ${usedBreakMinutes} minute break!`);
+
+                logActivity('focus_completed',{duration:usedFocusMinutes,xp:bonusXp,coins:bonusCoins});
+                startBreakSession(usedBreakMinutes);
+            };
+
             const startFocusSession=(task)=>{
                 if(focusTimer){
                     alert('⚠️ Focus session already running');
                     return;
                 }
-                
-                // Security: Validate duration inputs
-                const validFocusDuration=Math.max(1,Math.min(120,parseInt(focusDuration)||25));
-                const validBreakDuration=Math.max(1,Math.min(30,parseInt(breakDuration)||5));
-                
-                if(validFocusDuration!==focusDuration){
-                    setFocusDuration(validFocusDuration);
-                }
-                if(validBreakDuration!==breakDuration){
-                    setBreakDuration(validBreakDuration);
-                }
-                
-                setFocusTask(task);
-                setFocusMode('work');
-                setFocusTimeRemaining(validFocusDuration*60);
-                setShowFocus(true);
-                
-                const timer=setInterval(()=>{
-                    setFocusTimeRemaining(prev=>{
-                        if(prev<=1){
-                            clearInterval(timer);
-                            setFocusTimer(null);
-                            completeFocusSession();
-                            return 0;
-                        }
-                        return prev-1;
-                    });
-                },1000);
-                
-                setFocusTimer(timer);
-                logActivity('focus_started',{task:task?.title||'No task',duration:validFocusDuration});
-            };
 
-            const completeFocusSession=()=>{
-                const isWorkSession=focusMode==='work';
-                
-                if(isWorkSession){
-                    setFocusSessions(prev=>prev+1);
-                    
-                    // Reward completion
-                    const bonusCoins=Math.floor(focusDuration*2);
-                    const bonusXp=Math.floor(focusDuration*5);
-                    setCoins(p=>p+bonusCoins);
-                    setXp(p=>p+bonusXp);
-                    setTotalXp(p=>p+bonusXp);
-                    showCoinAnim(bonusCoins);
-                    
-                    alert(`🎉 Focus Session Complete!\n\n+${bonusXp} XP\n+${bonusCoins} Coins\n\nTake a ${breakDuration} minute break!`);
-                    
-                    // Auto-start break
-                    setFocusMode('break');
-                    setFocusTimeRemaining(breakDuration*60);
-                    
-                    const timer=setInterval(()=>{
-                        setFocusTimeRemaining(prev=>{
-                            if(prev<=1){
-                                clearInterval(timer);
-                                setFocusTimer(null);
-                                alert('✅ Break over! Ready for another session?');
-                                setShowFocus(false);
-                                return 0;
-                            }
-                            return prev-1;
-                        });
-                    },1000);
-                    
-                    setFocusTimer(timer);
-                    
-                    logActivity('focus_completed',{duration:focusDuration,xp:bonusXp,coins:bonusCoins});
-                }else{
-                    alert('✅ Break over! Ready for another session?');
-                    setShowFocus(false);
-                }
+                const validFocusDuration=Math.max(1,Math.min(120,parseInt(focusDuration,10)||25));
+                const validBreakDuration=Math.max(1,Math.min(30,parseInt(breakDuration,10)||5));
+
+                if(validFocusDuration!==focusDuration)setFocusDuration(validFocusDuration);
+                if(validBreakDuration!==breakDuration)setBreakDuration(validBreakDuration);
+
+                setActiveFocusConfig({focusMinutes:validFocusDuration,breakMinutes:validBreakDuration});
+                setFocusTask(task);
+                setShowFocus(true);
+
+                launchTimer('work',validFocusDuration,()=>completeFocusSession(validFocusDuration,validBreakDuration));
+                logActivity('focus_started',{task:task?.title||'No task',duration:validFocusDuration});
             };
 
             const stopFocusSession=()=>{
                 if(!focusTimer)return;
-                
+
                 const confirmStop=confirm('⚠️ Stop focus session?\n\nYou won\'t get rewards if you quit early.');
                 if(!confirmStop)return;
-                
-                clearInterval(focusTimer);
-                setFocusTimer(null);
+
+                stopFocusTimer();
                 setShowFocus(false);
                 setFocusTask(null);
                 setFocusTimeRemaining(0);
-                
+
                 logActivity('focus_cancelled',{});
             };
 
@@ -2458,7 +2816,7 @@
             };
 
             // ========================
-            // FOCUS MODE & SPOTIFY - END
+            // FOCUS MODE & MUSIC - END
             // ========================
 
             const buyStreakSaver=()=>{
@@ -2477,14 +2835,36 @@
                 if(tier<(item.minT||0))return alert(`Need ${tiers[item.minT||0].name} tier!`);
                 if(lvl<(item.minL||1))return alert(`Need Level ${item.minL||1}!`);
                 if(coins<price)return alert(`Need ${price} coins!`);
-                if(owned.includes(item.id)&&item.type!=='xp_boost'&&item.type!=='coin_boost'&&item.type!=='ability')return alert('Already owned!');
-                
+                if(owned.includes(item.id)&&item.type!=='xp_boost'&&item.type!=='coin_boost'&&item.type!=='combo_boost'&&item.type!=='ability')return alert('Already owned!');
+
+                if(item.type==='xp_boost'||item.type==='coin_boost'||item.type==='combo_boost'){
+                    if(item.activeWindow&&!isBoosterWindowActive(item)){
+                        return alert(`⏰ ${item.n} can only be activated during ${getBoosterWindowLabel(item.activeWindow)}.`);
+                    }
+
+                    setCoins(p=>p-price);
+
+                    if(item.type==='combo_boost'){
+                        const expiresAt=Date.now()+item.duration;
+                        setActiveBoosters(p=>[
+                            ...p,
+                            {id:`${item.id}-xp-${Date.now()}`,source:item.id,boost:item.xpBoost,type:'xp',expires:expiresAt,activeWindow:item.activeWindow||null},
+                            {id:`${item.id}-coin-${Date.now()+1}`,source:item.id,boost:item.coinBoost,type:'coin',expires:expiresAt,activeWindow:item.activeWindow||null}
+                        ]);
+                        alert(`Activated ${item.n}! ✨
+
+${item.xpBoost}x XP + ${item.coinBoost}x Coins for ${Math.round(item.duration/60000)} minutes.`);
+                    }else{
+                        const boosterType=normalizeBoosterType(item.type);
+                        setActiveBoosters(p=>[...p,{...item,type:boosterType,expires:Date.now()+item.duration}]);
+                        alert(`Activated ${item.n}! ✨`);
+                    }
+                    return;
+                }
+
                 setCoins(p=>p-price);
 
-                if(item.type==='xp_boost'||item.type==='coin_boost'){
-                    setActiveBoosters(p=>[...p,{...item,expires:Date.now()+item.duration}]);
-                    alert(`Activated ${item.n}! ✨`);
-                }else if(item.type==='special_char'){
+                if(item.type==='special_char'){
                     setOwned(p=>[...p,item.id]);
                     setSpecialChars(p=>[...p,item.char]);
                     alert(`Unlocked ${item.n}! 🎉`);
@@ -2503,6 +2883,7 @@
                 }else{
                     setOwned(p=>[...p,item.id]);
                     alert(`Bought ${item.n}! 🎉`);
+                    if(item.rarity>=8)triggerEpicRedeem('LEGENDARY PURCHASE!', item.n);
                 }
             };
 
@@ -2569,19 +2950,19 @@
                                 </div>
                             )}
                             {authMode==='login'&&(
-                                <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 animate-slideUp">
+                                <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 animate-slideUp animate-neon-pulse">
                                     <h2 className="text-3xl font-bold mb-6 text-center">Welcome Back</h2>
                                     {authErr&&<div className="bg-red-500 bg-opacity-20 border border-red-500 rounded-lg p-3 mb-4 text-red-200 text-sm">{authErr}</div>}
                                     <div className="space-y-4">
                                         <div><label className="block text-sm text-gray-400 mb-2">Username</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><User/></div><input type="text" value={authForm.username} onChange={(e)=>setAuthForm({...authForm,username:e.target.value})} onKeyPress={(e)=>e.key==='Enter'&&login()} className="w-full bg-gray-700 text-white pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Enter username"/></div></div>
                                         <div><label className="block text-sm text-gray-400 mb-2">Password</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><Lock/></div><input type={showPass?'text':'password'} value={authForm.password} onChange={(e)=>setAuthForm({...authForm,password:e.target.value})} onKeyPress={(e)=>e.key==='Enter'&&login()} className="w-full bg-gray-700 text-white pl-12 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Enter password"/><button onClick={()=>setShowPass(!showPass)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300">{showPass?<EyeOff/>:<Eye/>}</button></div></div>
                                         <button onClick={login} className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 transition-all transform hover:scale-105 shadow-lg">Login</button>
-                                        <div className="text-center space-y-2"><button onClick={()=>{setAuthMode('forgot');setAuthErr('');setAuthForm({username:'',email:'',password:'',confirmPassword:''})}} className="text-cyan-400 hover:text-cyan-300 text-sm">Forgot Password?</button><div className="text-gray-500 text-sm">Don't have an account? <button onClick={()=>{setAuthMode('signup');setAuthErr('');setAuthForm({username:'',email:'',password:'',confirmPassword:''})}} className="text-purple-400 hover:text-purple-300">Sign Up</button></div></div>
+                                        <div className="text-center space-y-2"><button onClick={()=>{setAuthMode('forgot');setAuthErr('');setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''})}} className="text-cyan-400 hover:text-cyan-300 text-sm">Forgot Password?</button><div className="text-gray-500 text-sm">Don't have an account? <button onClick={()=>{setAuthMode('signup');setAuthErr('');setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''})}} className="text-purple-400 hover:text-purple-300">Sign Up</button></div></div>
                                     </div>
                                 </div>
                             )}
                             {authMode==='signup'&&(
-                                <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 animate-slideUp">
+                                <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 animate-slideUp animate-neon-pulse">
                                     <h2 className="text-3xl font-bold mb-6 text-center">Create Account</h2>
                                     {authErr&&<div className="bg-red-500 bg-opacity-20 border border-red-500 rounded-lg p-3 mb-4 text-red-200 text-sm">{authErr}</div>}
                                     <div className="space-y-4">
@@ -2590,21 +2971,27 @@
                                         <div><label className="block text-sm text-gray-400 mb-2">Password</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><Lock/></div><input type={showPass?'text':'password'} value={authForm.password} onChange={(e)=>setAuthForm({...authForm,password:e.target.value})} className="w-full bg-gray-700 text-white pl-12 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Min 6 characters"/><button onClick={()=>setShowPass(!showPass)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300">{showPass?<EyeOff/>:<Eye/>}</button></div></div>
                                         <div><label className="block text-sm text-gray-400 mb-2">Confirm Password</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><Lock/></div><input type={showPass?'text':'password'} value={authForm.confirmPassword} onChange={(e)=>setAuthForm({...authForm,confirmPassword:e.target.value})} onKeyPress={(e)=>e.key==='Enter'&&signup()} className="w-full bg-gray-700 text-white pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Confirm password"/></div></div>
                                         <button onClick={signup} className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 transition-all transform hover:scale-105 shadow-lg">Create Account</button>
-                                        <div className="text-center text-gray-500 text-sm">Already have account? <button onClick={()=>{setAuthMode('login');setAuthErr('');setAuthForm({username:'',email:'',password:'',confirmPassword:''})}} className="text-cyan-400 hover:text-cyan-300">Login</button></div>
+                                        <div className="text-center text-gray-500 text-sm">Already have account? <button onClick={()=>{setAuthMode('login');setAuthErr('');setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''})}} className="text-cyan-400 hover:text-cyan-300">Login</button></div>
                                     </div>
                                 </div>
                             )}
                             {authMode==='forgot'&&(
-                                <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 animate-slideUp">
-                                    <h2 className="text-3xl font-bold mb-6 text-center">Reset Password</h2>
+                                <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 animate-slideUp animate-neon-pulse">
+                                    <h2 className="text-3xl font-bold mb-2 text-center">Reset Password with OTP</h2>
+                                    <p className="text-center text-gray-400 text-sm mb-6">Request OTP, verify it, then set your new password.</p>
                                     {authErr&&<div className="bg-red-500 bg-opacity-20 border border-red-500 rounded-lg p-3 mb-4 text-red-200 text-sm">{authErr}</div>}
                                     {resetMsg&&<div className="bg-green-500 bg-opacity-20 border border-green-500 rounded-lg p-3 mb-4 text-green-200 text-sm">{resetMsg}</div>}
                                     <div className="space-y-4">
                                         <div><label className="block text-sm text-gray-400 mb-2">Username</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><User/></div><input type="text" value={authForm.username} onChange={(e)=>setAuthForm({...authForm,username:e.target.value})} className="w-full bg-gray-700 text-white pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Your username"/></div></div>
                                         <div><label className="block text-sm text-gray-400 mb-2">Email</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><Mail/></div><input type="email" value={authForm.email} onChange={(e)=>setAuthForm({...authForm,email:e.target.value})} className="w-full bg-gray-700 text-white pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Your email"/></div></div>
-                                        <div><label className="block text-sm text-gray-400 mb-2">New Password</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><Lock/></div><input type={showPass?'text':'password'} value={authForm.password} onChange={(e)=>setAuthForm({...authForm,password:e.target.value})} onKeyPress={(e)=>e.key==='Enter'&&forgotPass()} className="w-full bg-gray-700 text-white pl-12 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="New password"/><button onClick={()=>setShowPass(!showPass)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300">{showPass?<EyeOff/>:<Eye/>}</button></div></div>
-                                        <button onClick={forgotPass} className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 transition-all transform hover:scale-105 shadow-lg">Reset Password</button>
-                                        <div className="text-center text-gray-500 text-sm">Remember password? <button onClick={()=>{setAuthMode('login');setAuthErr('');setResetMsg('');setAuthForm({username:'',email:'',password:'',confirmPassword:''})}} className="text-cyan-400 hover:text-cyan-300">Login</button></div>
+                                        <button onClick={sendForgotOtp} className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-90 transition-all transform hover:scale-105 shadow-lg">Send Secure OTP</button>
+                                        <div><label className="block text-sm text-gray-400 mb-2">OTP Code</label><input type="text" maxLength="6" value={authForm.otp||''} onChange={(e)=>setAuthForm({...authForm,otp:e.target.value.replace(/\D/g,'')})} className="w-full bg-gray-700 text-white px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 tracking-[0.35em] text-center font-bold" placeholder="000000"/></div>
+                                        <div><label className="block text-sm text-gray-400 mb-2">New Password</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><Lock/></div><input type={showPass?'text':'password'} value={authForm.password} onChange={(e)=>setAuthForm({...authForm,password:e.target.value})} onKeyPress={(e)=>e.key==='Enter'&&forgotPass()} className="w-full bg-gray-700 text-white pl-12 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="New secure password"/><button onClick={()=>setShowPass(!showPass)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300">{showPass?<EyeOff/>:<Eye/>}</button></div></div>
+                                        <div className="bg-gray-900 rounded-lg p-3 text-xs grid grid-cols-2 gap-2">
+                                            {Object.entries(getPasswordChecklist(authForm.password)).map(([k,v])=><p key={k} className={v?'text-green-400':'text-gray-500'}>{v?'✅':'•'} {k==='length'?'8+ chars':k==='upper'?'Uppercase':k==='lower'?'Lowercase':'Number'}</p>)}
+                                        </div>
+                                        <button onClick={forgotPass} className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 transition-all transform hover:scale-105 shadow-lg">Verify OTP & Reset Password</button>
+                                        <div className="text-center text-gray-500 text-sm">Remember password? <button onClick={()=>{setAuthMode('login');setAuthErr('');setResetMsg('');setForgotOtpMeta(null);setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''})}} className="text-cyan-400 hover:text-cyan-300">Login</button></div>
                                     </div>
                                 </div>
                             )}
@@ -2619,8 +3006,9 @@
                 <div className={`min-h-screen ${appTheme==='dark'?'bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white':'bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 text-gray-900'} p-4 md:p-8 transition-colors duration-300`}>
                     {coinAnim&&<div key={coinAnim.key} className="fixed top-20 right-4 z-50 animate-coinPop"><div className="bg-yellow-500 text-black px-4 py-2 rounded-full font-bold text-xl shadow-lg">+{coinAnim.amt} 💰</div></div>}
                     {xpAnim&&<div key={xpAnim.key} className="fixed top-32 right-4 z-50 animate-coinPop"><div className="bg-green-500 text-white px-4 py-2 rounded-full font-bold text-xl shadow-lg">+{xpAnim.amt} ⚡</div></div>}
-                    {showTierUp&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 animate-fadeIn"><div className="text-center animate-scaleIn"><div className="text-9xl mb-6 animate-bounce">{ct.icon}</div><h1 className={`text-7xl font-bold mb-4 bg-gradient-to-r ${ct.color} bg-clip-text text-transparent animate-pulse`}>TIER UP!</h1><p className="text-5xl font-bold mb-4">{ct.name}</p><p className="text-2xl text-yellow-400">+500 Coins! 💰</p><div className="flex justify-center gap-4 mt-6">{[...Array(5)].map((_,i)=><div key={i} className="w-12 h-12 text-yellow-400"><Star/></div>)}</div></div></div>}
+                    {showTierUp&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-95 animate-fadeIn"><div className="text-center animate-reward-burst"><div className="text-9xl mb-4 animate-bounce animate-mega-flash">{ct.icon}</div><h1 className={`text-8xl font-black mb-3 bg-gradient-to-r ${ct.color} bg-clip-text text-transparent animate-pulse`}>MEGA TIER UP!</h1><p className="text-5xl font-bold mb-2 animate-neon-pulse">{ct.name}</p><p className="text-2xl text-yellow-300">+500 Coins! 💰</p><div className="flex justify-center gap-3 mt-5">{[...Array(8)].map((_,i)=><div key={i} className="w-10 h-10 text-yellow-300 animate-bounce" style={{animationDelay:`${i*0.08}s`}}><Star/></div>)}</div></div></div>}
                     {showLvlUp&&<div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none"><div className="text-center animate-scaleIn"><div className="w-32 h-32 text-yellow-400 mx-auto mb-4"><Zap/></div><h2 className="text-6xl font-bold text-yellow-400">LEVEL UP!</h2><p className="text-4xl mt-2">Level {lvl}</p><p className="text-xl text-yellow-400 mt-2">+50 Coins! 💰</p></div></div>}
+                    {epicRedeemAnim&&<div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/85 pointer-events-none"><div key={epicRedeemAnim.key} className="text-center animate-reward-burst"><h2 className="text-7xl font-black bg-gradient-to-r from-red-500 via-yellow-400 to-pink-500 bg-clip-text text-transparent animate-mega-flash">{epicRedeemAnim.title}</h2><p className="text-3xl text-white mt-3">{epicRedeemAnim.message}</p></div></div>}
                     
                     {showSeasonComplete&&(
                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 animate-fadeIn">
@@ -2633,7 +3021,7 @@
                                     {showSeasonComplete.oldSeason===5&&'🌌'}
                                     {showSeasonComplete.oldSeason===6&&'♾️'}
                                 </div>
-                                <h1 className="text-8xl font-bold mb-6 bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-500 bg-clip-text text-transparent animate-pulse">
+                                <h1 className="text-8xl font-bold mb-6 bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-500 bg-clip-text text-transparent animate-pulse animate-mega-flash">
                                     SEASON {showSeasonComplete.oldSeason} COMPLETE!
                                 </h1>
                                 <div className="text-3xl text-gray-300 mb-8 space-y-2">
@@ -2669,6 +3057,14 @@
                     {showTutorial&&(
                         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-95 p-4 overflow-y-auto" style={{zIndex:1000}}>
                             <div className="max-w-4xl w-full mx-4 my-auto animate-scaleIn max-h-screen overflow-y-auto">
+                                <div className="mb-4 bg-gray-900/80 border border-cyan-500 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2">
+                                    <p className="text-sm text-cyan-300">Tutorial Step {tutorialStep+1} / 6</p>
+                                    <div className="flex gap-2">
+                                        <button onClick={()=>setTutorialStep(0)} className="px-3 py-1 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm">Restart</button>
+                                        <button onClick={()=>setTutorialStep(5)} className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm">Quick Guide</button>
+                                        <button onClick={completeTutorial} className="px-3 py-1 rounded-lg bg-red-700 hover:bg-red-600 text-sm">Finish</button>
+                                    </div>
+                                </div>
                                 {tutorialStep===0&&(
                                     <div className="bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 rounded-3xl p-8 border-4 border-cyan-400 shadow-2xl animate-glow">
                                         <div className="text-center mb-8">
@@ -2677,7 +3073,7 @@
                                                 WELCOME TO P.I.V.T
                                             </h1>
                                             <p className="text-2xl text-cyan-300 animate-fadeIn">
-                                                Your Productivity Journey Begins Here
+                                                Your Productivity Journey Starts Smarter
                                             </p>
                                         </div>
                                         <div className="bg-black bg-opacity-50 rounded-2xl p-6 mb-6">
@@ -2687,12 +3083,10 @@
                                         </div>
                                         <div className="space-y-3">
                                             <button onClick={()=>setTutorialStep(1)} className="w-full py-4 rounded-xl font-bold text-xl bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 hover:opacity-90 transition-all shadow-lg animate-pulse">
-                                                START TUTORIAL 🎮
+                                                START INTERACTIVE TUTORIAL 🎮
                                             </button>
                                             <button onClick={()=>{
-                                                setShowTutorial(false);
-                                                setTutorialCompleted(true);
-                                                saveData();
+                                                completeTutorial();
                                             }} className="w-full py-2 rounded-xl font-bold text-sm bg-gray-700 hover:bg-gray-600 transition-all text-gray-300">
                                                 Skip Tutorial
                                             </button>
@@ -2921,9 +3315,7 @@
                                                 ← Back
                                             </button>
                                             <button onClick={()=>{
-                                                setShowTutorial(false);
-                                                setTutorialCompleted(true);
-                                                saveData();
+                                                completeTutorial();
                                             }} className="flex-1 py-3 rounded-xl font-bold text-xl bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 hover:opacity-90 transition-all animate-pulse shadow-lg">
                                                 START MY JOURNEY! 🚀
                                             </button>
@@ -2938,10 +3330,7 @@
                                             <h2 className="text-4xl font-bold text-red-400 mb-4">Error</h2>
                                             <p className="text-xl text-white mb-6">Something went wrong with the tutorial.</p>
                                             <button onClick={()=>{
-                                                setShowTutorial(false);
-                                                setTutorialCompleted(true);
-                                                setTutorialStep(0);
-                                                saveData();
+                                                completeTutorial();
                                             }} className="w-full py-3 rounded-xl font-bold bg-gray-700 hover:bg-gray-600 transition-all">
                                                 Close Tutorial
                                             </button>
@@ -2953,7 +3342,7 @@
                     )}
 
                     <div className="max-w-7xl mx-auto">
-                        <div className="flex items-center justify-between mb-6 animate-fadeIn">
+                        <div className="flex items-center justify-between mb-6 animate-fadeIn animate-float-soft">
                             <div className="flex items-center gap-3">
                                 <button onClick={()=>setShowSettings(true)} className={`p-3 rounded-xl ${appTheme==='dark'?'bg-gray-800 hover:bg-gray-700':'bg-white hover:bg-gray-100 shadow-lg'} transition-all`}><Settings/></button>
                                 <div className={`${appTheme==='dark'?'bg-gray-800':'bg-white shadow-lg'} rounded-xl px-4 py-2 flex items-center gap-2`}><Coins/><span className="text-2xl font-bold text-yellow-400">{coins.toLocaleString()}</span></div>
@@ -2961,7 +3350,7 @@
                                 {activeBoosters.length>0&&<div className="bg-purple-600 rounded-xl px-3 py-2 text-sm font-bold flex items-center gap-2"><Clock/>{activeBoosters.length}x Active</div>}
                             </div>
                             <div className="text-center">
-                                <h1 className={`text-4xl md:text-6xl font-bold bg-gradient-to-r ${ctheme.p} ${ctheme.anim||''} bg-clip-text text-transparent`}>P.I.V.T</h1>
+                                <h1 className={`text-4xl md:text-6xl font-bold bg-gradient-to-r ${ctheme.p} ${ctheme.anim||''} bg-clip-text text-transparent animate-neon-pulse`}>P.I.V.T</h1>
                                 {currentTitle&&<p className="text-yellow-400 text-sm font-bold mt-1">「{currentTitle}」</p>}
                             </div>
                             <div className="flex items-center gap-3">
@@ -2974,7 +3363,53 @@
                             </div>
                         </div>
 
-                        <div className={`bg-gradient-to-br ${ct.color} p-1 rounded-2xl mb-6 shadow-xl ${currentBorder?borderStyles[currentBorder]:''}`}>
+                        <div className="relative overflow-hidden mb-6 rounded-2xl border border-cyan-500/40 bg-gradient-to-r from-cyan-900/40 via-indigo-900/40 to-purple-900/40 p-5 animate-page-enter">
+                            <div className="absolute -top-8 -left-8 w-28 h-28 rounded-full bg-cyan-400/20 blur-2xl animate-home-orb"></div>
+                            <div className="absolute -bottom-10 right-5 w-32 h-32 rounded-full bg-purple-400/20 blur-2xl animate-home-orb" style={{animationDelay:'1.2s'}}></div>
+                            <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                <div>
+                                    <p className="text-cyan-200 text-sm font-bold uppercase tracking-wider">Homepage Command Center</p>
+                                    <h2 className={`text-2xl md:text-3xl font-black bg-gradient-to-r ${ctheme.p} bg-clip-text text-transparent animate-text-sheen`}>Keep the streak alive, earn smarter rewards.</h2>
+                                    <p className="text-gray-300 text-sm mt-1">Daily logins, honest goal tracking, and AI-scored missions are all active.</p>
+                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        <label className="text-xs text-cyan-200">Timezone</label>
+                                        <select value={timeZone} onChange={(e)=>setTimeZone(e.target.value)} className="bg-gray-900/70 border border-cyan-500/40 rounded-lg px-2 py-1 text-xs text-cyan-100">{timeZoneChoices.map(tz=><option key={tz} value={tz}>{tz}</option>)}</select>
+                                        <p className="text-xs text-gray-300">{getTimezoneClock().pretty} ({getTimezoneClock().shortZone})</p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 text-center">
+                                    <div className="bg-black/30 rounded-xl px-3 py-2"><p className="text-xs text-gray-400">Streak</p><p className="font-bold text-orange-300">{stats.currentStreak}d</p></div>
+                                    <div className="bg-black/30 rounded-xl px-3 py-2"><p className="text-xs text-gray-400">Goal Win</p><p className="font-bold text-blue-300">{goals.length?Math.round((goals.filter(g=>g.completed).length/goals.length)*100):0}%</p></div>
+                                    <div className="bg-black/30 rounded-xl px-3 py-2"><p className="text-xs text-gray-400">Reward x</p><p className="font-bold text-green-300">{getTaskRewardMultiplier().toFixed(2)}x</p></div>
+                                </div>
+                            </div>
+                            <div className="relative z-10 mt-4 grid md:grid-cols-7 gap-2">{Array.from({length:7}).map((_,idx)=>{
+                                const base=new Date();
+                                const offset=idx-base.getDay();
+                                const day=new Date(base.getFullYear(),base.getMonth(),base.getDate()+offset);
+                                const key=getDateKeyInZone(day);
+                                const dueCount=tasks.filter(t=>t.dueDate&&getDateKeyInZone(t.dueDate)===key&&!t.completed).length;
+                                const isToday=key===getDateKeyInZone(new Date());
+                                return <div key={key} className={`rounded-xl border p-2 ${isToday?'border-cyan-400 bg-cyan-900/30':'border-gray-700 bg-black/25'}`}>
+                                    <p className="text-xs text-gray-400">{formatDateTimeInZone(day,{weekday:'short'})}</p>
+                                    <p className={`text-sm font-bold ${isToday?'text-cyan-200':'text-white'}`}>{formatDateTimeInZone(day,{day:'2-digit',month:'short'})}</p>
+                                    <p className="text-xs text-purple-200 mt-1">{dueCount} due</p>
+                                </div>;
+                            })}</div>
+                        </div>
+
+                        {activeBoosters.length>0&&<div className="mb-6 bg-gray-800/80 border border-cyan-500 rounded-2xl p-4">
+                            <h3 className="font-bold text-cyan-300 mb-3">⚡ Active Boosters Details</h3>
+                            <div className="grid md:grid-cols-2 gap-2">
+                                {activeBoosters.filter(b=>b&&b.expires>Date.now()).map(b=><div key={b.id||`${b.type}-${b.expires}`} className="bg-gray-900 rounded-lg p-3 text-sm">
+                                    <p className="font-bold text-white">{normalizeBoosterType(b.type)==='xp'?`${b.boost}x XP`:`${b.boost}x Coins`}</p>
+                                    <p className="text-cyan-300">Time left: {formatTimeLeft(b.expires-Date.now())}</p>
+                                    {b.activeWindow&&<p className="text-purple-300 text-xs">Window: {getBoosterWindowLabel(b.activeWindow)}</p>}
+                                </div>)}
+                            </div>
+                        </div>}
+
+                        <div className={`bg-gradient-to-br ${ct.color} p-1 rounded-2xl mb-6 shadow-xl animate-neon-pulse ${currentBorder?borderStyles[currentBorder]:''}`}>
                             <div className="bg-gray-900 rounded-xl p-6">
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-4">
@@ -3088,7 +3523,7 @@
                                                                     {formatCountdown(countdown)}
                                                                 </p>
                                                                 <p className="text-xs text-gray-500 mt-1">
-                                                                    Due: {new Date(t.dueDate).toLocaleDateString()} {new Date(t.dueDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                                    Due: {formatDateTimeInZone(t.dueDate,{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'})} ({timeZone})
                                                                 </p>
                                                             </div>
                                                         )}
@@ -3141,10 +3576,10 @@
                             </div>
                         </div>
 
-                        {showShop&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4"><div className="bg-gray-800 rounded-2xl max-w-6xl w-full h-screen border border-gray-700 animate-scaleIn flex flex-col"><div className="sticky top-0 bg-gradient-to-b from-gray-800 via-gray-800 to-transparent pb-6 pt-8 px-8 z-50 backdrop-blur-sm shadow-2xl border-b-2 border-purple-500"><div className="flex items-center justify-between mb-4"><h2 className="text-4xl font-bold flex items-center gap-2"><Shop/><span>Shop</span></h2><button onClick={()=>setShowShop(false)} className="p-2 rounded-xl bg-gray-700 hover:bg-gray-600 transition-all"><X/></button></div><div className="flex gap-2 flex-wrap">{rarities.map((r,i)=><button key={i} onClick={()=>setShopFilter(i)} className={`px-4 py-2 rounded-lg font-bold transition-all ${shopFilter===i?`bg-gradient-to-r ${r.c}`:'bg-gray-700 hover:bg-gray-600'}`}>{r.n}</button>)}</div></div><div className="flex-1 overflow-y-auto px-8 pb-8 scrollbar-hide"><div className="grid md:grid-cols-3 gap-4 pt-4">{shopItems.filter(item=>item.rarity===shopFilter&&(!item.season||item.season<=season)).map(item=>{const r=rarities[item.rarity];const locked=tier<(item.minT||0)||lvl<(item.minL||1);const isOwned=owned.includes(item.id);const isBooster=item.type==='xp_boost'||item.type==='coin_boost';const shouldBlur=item.rarity>=5&&locked;return<div key={item.id} className={`bg-gray-700 rounded-xl p-4 border-3 transition-all ${shouldBlur?'blur-sm':''} ${locked?'opacity-50':''}`} style={{borderWidth:'3px',borderStyle:'solid',borderImage:`linear-gradient(to right, ${r.c.replace('from-','').replace('to-',',')}) 1`}}><div className={`w-full h-2 rounded-full bg-gradient-to-r ${r.c} mb-3`}></div><div className="flex items-center justify-between mb-3"><div className="flex items-center gap-3"><span className="text-4xl">{item.icon||item.char}</span><div><p className="font-bold">{shouldBlur?'???':item.n}</p><p className={`text-xs bg-gradient-to-r ${r.c} bg-clip-text text-transparent font-bold`}>{r.n}</p></div></div><div className="text-right"><p className="text-2xl font-bold text-yellow-400">{shouldBlur?'???':item.price} 💰</p></div></div>{locked&&<p className="text-red-400 text-sm mb-2">🔒 {shouldBlur?'Locked - Reach Higher Tier to Reveal':`Requires ${tiers[item.minT||0].name}${item.minL>1?` Level ${item.minL}`:''}`}</p>}{isOwned&&!isBooster?<div className="bg-green-600 text-center py-2 rounded-lg font-bold">✓ Owned</div>:<button onClick={()=>buyItem(item)} disabled={locked} className={`w-full py-2 rounded-lg font-bold ${locked?'bg-gray-600 cursor-not-allowed':'bg-gradient-to-r from-yellow-500 to-orange-500 hover:opacity-90'}`}>{locked?'🔒 Locked':'Buy'}</button>}</div>})}{shopFilter===10&&<div className="bg-gray-700 rounded-xl p-4 border-3" style={{borderWidth:'3px',borderStyle:'solid',borderImage:'linear-gradient(to right, rgb(168, 85, 247), rgb(236, 72, 153)) 1'}}><div className="w-full h-2 rounded-full bg-gradient-to-r from-purple-400 to-purple-500 mb-3"></div><div className="flex items-center justify-between mb-3"><div className="flex items-center gap-3"><span className="text-4xl">🛡️</span><div><p className="font-bold">Streak Saver</p><p className="text-xs text-purple-400 font-bold">Special Item</p></div></div><p className="text-2xl font-bold text-yellow-400">1000 💰</p></div><p className="text-sm text-gray-400 mb-2">Save your streak! (1x per week)</p>{stats.streakSaverUsedThisWeek?<div className="bg-gray-600 text-center py-2 rounded-lg font-bold">Used This Week</div>:<button onClick={buyStreakSaver} className="w-full py-2 rounded-lg font-bold bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90">Buy & Use</button>}</div>}</div></div></div></div>}
+                        {showShop&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4"><div className="bg-gray-800 rounded-2xl max-w-6xl w-full h-screen border border-gray-700 animate-scaleIn flex flex-col"><div className="sticky top-0 bg-gradient-to-b from-gray-800 via-gray-800 to-transparent pb-6 pt-8 px-8 z-50 backdrop-blur-sm shadow-2xl border-b-2 border-purple-500"><div className="flex items-center justify-between mb-4"><h2 className="text-4xl font-bold flex items-center gap-2"><Shop/><span>Shop</span></h2><button onClick={()=>setShowShop(false)} className="p-2 rounded-xl bg-gray-700 hover:bg-gray-600 transition-all"><X/></button></div><div className="flex gap-2 flex-wrap">{rarities.map((r,i)=><button key={i} onClick={()=>setShopFilter(i)} className={`px-4 py-2 rounded-lg font-bold transition-all ${shopFilter===i?`bg-gradient-to-r ${r.c}`:'bg-gray-700 hover:bg-gray-600'}`}>{r.n}</button>)}</div></div><div className="flex-1 overflow-y-auto px-8 pb-8 scrollbar-hide"><div className="grid md:grid-cols-3 gap-4 pt-4">{shopItems.filter(item=>item.rarity===shopFilter&&(!item.season||item.season<=season)).map(item=>{const r=rarities[item.rarity];const locked=tier<(item.minT||0)||lvl<(item.minL||1);const isOwned=owned.includes(item.id);const isBooster=item.type==='xp_boost'||item.type==='coin_boost'||item.type==='combo_boost';const shouldBlur=item.rarity>=5&&locked;return<div key={item.id} className={`bg-gray-700 rounded-xl p-4 border-3 transition-all ${item.rarity>=8?'animate-neon-pulse animate-mega-flash':''} ${shouldBlur?'blur-sm':''} ${locked?'opacity-50':''}`} style={{borderWidth:'3px',borderStyle:'solid',borderImage:`linear-gradient(to right, ${r.c.replace('from-','').replace('to-',',')}) 1`}}><div className={`w-full h-2 rounded-full bg-gradient-to-r ${r.c} mb-3`}></div><div className="flex items-center justify-between mb-3"><div className="flex items-center gap-3"><span className="text-4xl">{item.icon||item.char}</span><div><p className="font-bold">{shouldBlur?'???':item.n}</p>{!shouldBlur&&isBooster&&<><p className="text-[11px] text-cyan-300 mt-1">⏱ {getBoosterTimingText(item)}</p>{item.season&&<p className="text-[11px] text-purple-300">Season {item.season}+ booster</p>}</>}<p className={`text-xs bg-gradient-to-r ${r.c} bg-clip-text text-transparent font-bold`}>{r.n}</p></div></div><div className="text-right"><p className="text-2xl font-bold text-yellow-400">{shouldBlur?'???':item.price} 💰</p></div></div>{locked&&<p className="text-red-400 text-sm mb-2">🔒 {shouldBlur?'Locked - Reach Higher Tier to Reveal':`Requires ${tiers[item.minT||0].name}${item.minL>1?` Level ${item.minL}`:''}`}</p>}{isOwned&&!isBooster?<div className="bg-green-600 text-center py-2 rounded-lg font-bold">✓ Owned</div>:<button onClick={()=>buyItem(item)} disabled={locked} className={`w-full py-2 rounded-lg font-bold ${locked?'bg-gray-600 cursor-not-allowed':'bg-gradient-to-r from-yellow-500 to-orange-500 hover:opacity-90'}`}>{locked?'🔒 Locked':'Buy'}</button>}</div>})}{shopFilter===10&&<div className="bg-gray-700 rounded-xl p-4 border-3" style={{borderWidth:'3px',borderStyle:'solid',borderImage:'linear-gradient(to right, rgb(168, 85, 247), rgb(236, 72, 153)) 1'}}><div className="w-full h-2 rounded-full bg-gradient-to-r from-purple-400 to-purple-500 mb-3"></div><div className="flex items-center justify-between mb-3"><div className="flex items-center gap-3"><span className="text-4xl">🛡️</span><div><p className="font-bold">Streak Saver</p><p className="text-xs text-purple-400 font-bold">Special Item</p></div></div><p className="text-2xl font-bold text-yellow-400">1000 💰</p></div><p className="text-sm text-gray-400 mb-2">Save your streak! (1x per week)</p>{stats.streakSaverUsedThisWeek?<div className="bg-gray-600 text-center py-2 rounded-lg font-bold">Used This Week</div>:<button onClick={buyStreakSaver} className="w-full py-2 rounded-lg font-bold bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90">Buy & Use</button>}</div>}</div></div></div></div>}
 
                         {showFocus&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 p-4">
-                            <div className="bg-gray-800 rounded-2xl p-8 max-w-3xl w-full border-2 border-purple-500 animate-scaleIn max-h-screen overflow-y-auto scrollbar-hide">
+                            <div className="bg-gray-800 rounded-2xl p-8 max-w-3xl w-full border-2 border-purple-500 animate-scaleIn animate-card-pop max-h-screen overflow-y-auto scrollbar-hide">
                                 <div className="flex items-center justify-between mb-6">
                                     <h2 className="text-4xl font-bold flex items-center gap-2">
                                         <Clock/>
@@ -3171,52 +3606,44 @@
                                                 </div>
                                             </div>
                                             <div className="bg-blue-900 bg-opacity-30 rounded-lg p-3 text-sm text-blue-200">
-                                                💡 <strong>Rewards:</strong> +{focusDuration*5} XP and +{focusDuration*2} Coins per session
+                                                💡 <strong>Rewards:</strong> +{Math.floor(activeFocusConfig.focusMinutes*5)} XP and +{Math.floor(activeFocusConfig.focusMinutes*2)} Coins per session
                                             </div>
                                         </div>
 
-                                        {/* Spotify Integration */}
+                                        {/* Built-in Focus Music (Non-Spotify) */}
                                         <div className="bg-gray-700 rounded-xl p-6 mb-6">
-                                            <h3 className="text-xl font-bold mb-4">🎵 Spotify Player</h3>
-                                            {!spotifyConnected?(
+                                            <h3 className="text-xl font-bold mb-4">🎵 Focus Music Player</h3>
+                                            {!musicEnabled?(
                                                 <div className="text-center py-4">
-                                                    <p className="text-gray-400 text-sm mb-3">Listen to focus music while working</p>
-                                                    <button onClick={()=>{
-                                                        setSpotifyConnected(true);
-                                                        setCurrentTrack({name:'Deep Focus',artist:'Focus Beats',album:'Productivity'});
-                                                        alert('🎵 Spotify Connected!\n\nNote: This is a UI demo. Full integration requires OAuth setup with Spotify Developer account.');
-                                                    }} className="w-full py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg font-bold transition-all flex items-center justify-center gap-2">
-                                                        <span>🎧</span> Connect Spotify
+                                                    <p className="text-gray-400 text-sm mb-3">Play normal background music while focusing</p>
+                                                    <button onClick={()=>setMusicEnabled(true)} className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white rounded-lg font-bold transition-all flex items-center justify-center gap-2">
+                                                        <span>🎧</span> Enable Music Player
                                                     </button>
-                                                    <p className="text-xs text-gray-500 mt-2">Premium account required</p>
+                                                    <p className="text-xs text-gray-500 mt-2">No Spotify account needed</p>
                                                 </div>
                                             ):(
                                                 <div className="space-y-3">
-                                                    {currentTrack&&(
-                                                        <div className="bg-gray-800 p-3 rounded-lg">
-                                                            <p className="text-xs text-gray-400">Now Playing</p>
-                                                            <p className="font-bold text-sm">{currentTrack.name}</p>
-                                                            <p className="text-xs text-gray-400">{currentTrack.artist}</p>
-                                                        </div>
-                                                    )}
+                                                    <div className="bg-gray-800 p-3 rounded-lg">
+                                                        <p className="text-xs text-gray-400">Now Selected</p>
+                                                        <p className="font-bold text-sm">{focusTracks[selectedTrackIndex]?.name}</p>
+                                                        <p className="text-xs text-gray-400">{focusTracks[selectedTrackIndex]?.artist}</p>
+                                                    </div>
                                                     <div className="flex gap-2 justify-center items-center">
-                                                        <button className="p-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-all">⏮</button>
-                                                        <button onClick={()=>setSpotifyPlaying(!spotifyPlaying)} className="p-3 bg-green-600 hover:bg-green-700 rounded-lg text-xl transition-all">{spotifyPlaying?'⏸':'▶️'}</button>
-                                                        <button className="p-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-all">⏭</button>
+                                                        <button onClick={()=>setSelectedTrackIndex(prev=>(prev-1+focusTracks.length)%focusTracks.length)} className="p-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-all">⏮</button>
+                                                        <button onClick={toggleMusicPlayback} className="p-3 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-xl transition-all">{musicPlaying?'⏸':'▶️'}</button>
+                                                        <button onClick={()=>setSelectedTrackIndex(prev=>(prev+1)%focusTracks.length)} className="p-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-all">⏭</button>
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-sm">🔊</span>
-                                                        <input type="range" min="0" max="100" defaultValue="70" className="flex-1 accent-green-500"/>
+                                                        <input type="range" min="0" max="100" value={musicVolume} onChange={(e)=>setMusicVolume(parseInt(e.target.value,10)||0)} className="flex-1 accent-cyan-500"/>
                                                     </div>
-                                                    <select className="w-full bg-gray-800 p-2 rounded-lg text-sm">
-                                                        <option>Deep Focus</option>
-                                                        <option>Productive Morning</option>
-                                                        <option>Concentration</option>
-                                                        <option>Instrumental Study</option>
-                                                        <option>Lo-Fi Beats</option>
-                                                        <option>Focus Flow</option>
+                                                    <select value={selectedTrackIndex} onChange={(e)=>setSelectedTrackIndex(parseInt(e.target.value,10)||0)} className="w-full bg-gray-800 p-2 rounded-lg text-sm">
+                                                        {focusTracks.map((track,idx)=><option key={track.name} value={idx}>{track.name} — {track.artist}</option>)}
                                                     </select>
-                                                    <button onClick={()=>setSpotifyConnected(false)} className="w-full py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-xs transition-all">Disconnect</button>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <button onClick={playSelectedTrack} className="py-2 bg-cyan-700 hover:bg-cyan-600 rounded-lg text-xs transition-all">Restart Track</button>
+                                                        <button onClick={()=>{if(audioRef.current)audioRef.current.pause();setMusicEnabled(false);}} className="py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-xs transition-all">Disable Player</button>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -3267,7 +3694,7 @@
                                         )}
                                         
                                         <div className="w-full h-4 bg-gray-700 rounded-full overflow-hidden mb-6">
-                                            <div className={`h-full transition-all ${focusMode==='work'?'bg-gradient-to-r from-purple-500 to-indigo-500':'bg-gradient-to-r from-green-500 to-emerald-500'}`} style={{width:`${100-((focusTimeRemaining/(focusMode==='work'?focusDuration:breakDuration)/60)*100)}%`}}></div>
+                                            <div className={`h-full transition-all ${focusMode==='work'?'bg-gradient-to-r from-purple-500 to-indigo-500':'bg-gradient-to-r from-green-500 to-emerald-500'}`} style={{width:`${100-((focusTimeRemaining/(focusMode==='work'?activeFocusConfig.focusMinutes:activeFocusConfig.breakMinutes)/60)*100)}%`}}></div>
                                         </div>
                                         
                                         
@@ -3280,7 +3707,7 @@
                         </div>}
 
                         {showHabits&&<div key="habits-modal" className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-90 p-4" style={{zIndex:1000}}>
-                            <div className="bg-gray-800 rounded-2xl p-8 max-w-6xl w-full border-2 border-green-500 animate-scaleIn max-h-screen overflow-y-auto scrollbar-hide">
+                            <div className="bg-gray-800 rounded-2xl p-8 max-w-6xl w-full border-2 border-green-500 animate-scaleIn animate-card-pop max-h-screen overflow-y-auto scrollbar-hide">
                                 <div className="flex items-center justify-between mb-6">
                                     <h2 className="text-4xl font-bold flex items-center gap-2 bg-gradient-to-r from-green-400 to-emerald-600 bg-clip-text text-transparent">
                                         <Repeat/>
@@ -3327,13 +3754,13 @@
                                 </div>
 
                                 <div className="space-y-3">
-                                    {habits.length===0?(<p className="text-gray-500 text-center py-8">No habits yet. Create one to get started!</p>):(habits.map(habit=>{const canComplete=!habit.lastCompletedDate||(habit.frequency==='daily'&&new Date(habit.lastCompletedDate).toDateString()!==new Date().toDateString())||(habit.frequency==='weekly'&&Math.floor((Date.now()-habit.lastCompletedDate)/(7*24*60*60*1000))>=1);return(<div key={habit.id} className={`bg-gray-700 rounded-xl p-4 border-2 ${habit.streak>=7?'border-yellow-500 animate-glow':'border-gray-600'}`}><div className="flex items-start justify-between gap-4"><div className="flex items-center gap-3 flex-1"><span className="text-4xl">{habit.icon}</span><div className="flex-1"><h4 className="font-bold text-lg">{habit.name}</h4><div className="flex items-center gap-3 mt-1"><span className={`px-2 py-1 rounded text-xs font-bold ${habit.frequency==='daily'?'bg-blue-600':'bg-purple-600'}`}>{habit.frequency==='daily'?'📅 Daily':'📆 Weekly'}</span><span className="text-sm text-gray-400">🔔 {habit.reminderTime}</span></div><div className="mt-2 flex items-center gap-4"><div><p className="text-xs text-gray-400">Current Streak</p><p className="text-2xl font-bold text-orange-400">{habit.streak} 🔥</p></div><div><p className="text-xs text-gray-400">Best Streak</p><p className="text-lg font-bold text-yellow-400">{habit.longestStreak} 👑</p></div><div><p className="text-xs text-gray-400">Total</p><p className="text-lg font-bold text-green-400">{habit.totalCompletions} ✓</p></div></div></div></div><div className="flex flex-col gap-2"><button onClick={()=>completeHabit(habit.id)} disabled={!canComplete} className={`px-6 py-3 rounded-xl font-bold transition-all ${canComplete?'bg-gradient-to-r from-green-500 to-emerald-600 hover:opacity-90':'bg-gray-600 cursor-not-allowed opacity-50'}`}>{canComplete?'✓ Complete':'⏰ Done Today'}</button><button onClick={()=>deleteHabit(habit.id)} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm">🗑️ Delete</button></div></div></div>);}))}
+                                    {habits.length===0?(<p className="text-gray-500 text-center py-8">No habits yet. Create one to get started!</p>):(habits.map(habit=>{const canComplete=!habit.lastCompletedDate||(habit.frequency==='daily'&&new Date(habit.lastCompletedDate).toDateString()!==new Date().toDateString())||(habit.frequency==='weekly'&&Math.floor((Date.now()-habit.lastCompletedDate)/(7*24*60*60*1000))>=1);return(<div key={habit.id} className={`bg-gray-700 rounded-xl p-4 border-2 ${habit.streak>=7?'border-yellow-500 animate-glow':'border-gray-600'}`}><div className="flex items-start justify-between gap-4"><div className="flex items-center gap-3 flex-1"><span className="text-4xl">{habit.icon}</span><div className="flex-1"><h4 className="font-bold text-lg">{habit.name}</h4><div className="flex items-center gap-3 mt-1"><span className={`px-2 py-1 rounded text-xs font-bold ${habit.frequency==='daily'?'bg-blue-600':'bg-purple-600'}`}>{habit.frequency==='daily'?'📅 Daily':'📆 Weekly'}</span><span className="text-sm text-gray-400">🔔 {habit.reminderTime}</span></div><div className="mt-2 flex items-center gap-4"><div><p className="text-xs text-gray-400">Current Streak</p><p className="text-2xl font-bold text-orange-400">{habit.streak} 🔥</p></div><div><p className="text-xs text-gray-400">Best Streak</p><p className="text-lg font-bold text-yellow-400">{habit.longestStreak} 👑</p></div><div><p className="text-xs text-gray-400">Total</p><p className="text-lg font-bold text-green-400">{habit.totalCompletions} ✓</p></div><div><p className="text-xs text-gray-400">Login Streak</p><p className="text-lg font-bold text-cyan-400">{habit.loginStreak||0} 🔁</p></div></div></div></div><div className="flex flex-col gap-2"><button onClick={()=>completeHabit(habit.id)} disabled={!canComplete} className={`px-6 py-3 rounded-xl font-bold transition-all ${canComplete?'bg-gradient-to-r from-green-500 to-emerald-600 hover:opacity-90':'bg-gray-600 cursor-not-allowed opacity-50'}`}>{canComplete?'✓ Complete':'⏰ Done Today'}</button><button onClick={()=>deleteHabit(habit.id)} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm">🗑️ Delete</button></div></div></div>);}))}
                                 </div>
                             </div>
                         </div>}
 
                         {showGoals&&<div key="goals-modal" className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-90 p-4" style={{zIndex:1000}}>
-                            <div className="bg-gray-800 rounded-2xl p-8 max-w-6xl w-full border-2 border-blue-500 animate-scaleIn max-h-screen overflow-y-auto scrollbar-hide">
+                            <div className="bg-gray-800 rounded-2xl p-8 max-w-6xl w-full border-2 border-blue-500 animate-scaleIn animate-card-pop max-h-screen overflow-y-auto scrollbar-hide">
                                 <div className="flex items-center justify-between mb-6">
                                     <h2 className="text-4xl font-bold flex items-center gap-2 bg-gradient-to-r from-blue-400 to-cyan-600 bg-clip-text text-transparent">
                                         <Target/>
@@ -3346,7 +3773,7 @@
 
                                 <div className="bg-gradient-to-r from-blue-900 to-cyan-900 bg-opacity-30 rounded-xl p-4 mb-6 border border-blue-500">
                                     <p className="text-center text-blue-200 font-bold">🎯 AI-Powered Goal Difficulty!</p>
-                                    <p className="text-center text-sm text-gray-300 mt-1">Our AI analyzes your goals and calculates fair coin rewards. Higher difficulty = bigger rewards!</p>
+                                    <p className="text-center text-sm text-gray-300 mt-1">Our AI analyzes your goals and calculates fair coin rewards. Higher difficulty = bigger rewards! Progress is locked forward-only (no rollback).</p>
                                 </div>
 
                                 <div className="bg-gray-700 rounded-xl p-6 mb-6">
@@ -3387,19 +3814,19 @@
                                 </div>
 
                                 <div className="space-y-3">
-                                    {goals.length===0?(<p className="text-gray-500 text-center py-8">No goals yet. Set one to get started!</p>):(goals.map(goal=>{const daysLeft=Math.ceil((new Date(goal.targetDate)-Date.now())/(24*60*60*1000));const isOverdue=daysLeft<0;return(<div key={goal.id} className={`bg-gray-700 rounded-xl p-4 border-2 ${goal.completed?'border-green-500':isOverdue?'border-red-500':'border-blue-500'}`}><div className="flex items-start justify-between gap-4"><div className="flex-1"><div className="flex items-center gap-2 mb-2"><h4 className={`font-bold text-xl ${goal.completed?'line-through text-gray-500':''}`}>{goal.title}</h4><span className={`px-2 py-1 rounded text-xs font-bold ${getPriorityColor(goal.priority)} text-white`}>P{goal.priority}</span><span className="px-2 py-1 rounded text-xs font-bold bg-purple-600">{goal.category}</span></div><p className="text-sm text-gray-300 mb-3">{goal.description}</p><div className="flex items-center gap-4 mb-3"><div><p className="text-xs text-gray-400">AI Difficulty</p><p className="text-2xl font-bold text-yellow-400">{goal.aiDifficulty}/10 🤖</p></div><div><p className="text-xs text-gray-400">Reward</p><p className="text-2xl font-bold text-green-400">{goal.coinReward} 💰</p></div><div><p className="text-xs text-gray-400">Target Date</p><p className={`text-lg font-bold ${isOverdue?'text-red-400':daysLeft<=7?'text-orange-400':'text-blue-400'}`}>{isOverdue?`${Math.abs(daysLeft)}d overdue`:daysLeft===0?'Today!':`${daysLeft}d left`}</p></div></div>{!goal.completed&&(<div><div className="flex items-center justify-between mb-1"><p className="text-xs text-gray-400">Progress</p><p className="text-xs font-bold">{goal.progress}%</p></div><div className="h-2 bg-gray-800 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-500 to-cyan-500" style={{width:`${goal.progress}%`}}></div></div><input type="range" min="0" max="100" value={goal.progress} onChange={(e)=>updateGoalProgress(goal.id,parseInt(e.target.value))} className="w-full mt-2"/></div>)}</div><div className="flex flex-col gap-2">{goal.completed?(<div className="bg-green-600 px-6 py-3 rounded-xl font-bold text-center">✅ Done!</div>):(<button onClick={()=>completeGoal(goal.id)} className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 hover:opacity-90 transition-all">✓ Complete</button>)}<button onClick={()=>deleteGoal(goal.id)} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm">🗑️ Delete</button></div></div></div>);}))}
+                                    {goals.length===0?(<p className="text-gray-500 text-center py-8">No goals yet. Set one to get started!</p>):(goals.map(goal=>{const daysLeft=Math.ceil((new Date(goal.targetDate)-Date.now())/(24*60*60*1000));const isOverdue=daysLeft<0;return(<div key={goal.id} className={`bg-gray-700 rounded-xl p-4 border-2 ${goal.completed?'border-green-500':isOverdue?'border-red-500':'border-blue-500'}`}><div className="flex items-start justify-between gap-4"><div className="flex-1"><div className="flex items-center gap-2 mb-2"><h4 className={`font-bold text-xl ${goal.completed?'line-through text-gray-500':''}`}>{goal.title}</h4><span className={`px-2 py-1 rounded text-xs font-bold ${getPriorityColor(goal.priority)} text-white`}>P{goal.priority}</span><span className="px-2 py-1 rounded text-xs font-bold bg-purple-600">{goal.category}</span></div><p className="text-sm text-gray-300 mb-3">{goal.description}</p><div className="flex items-center gap-4 mb-3"><div><p className="text-xs text-gray-400">AI Difficulty</p><p className="text-2xl font-bold text-yellow-400">{goal.aiDifficulty}/10 🤖</p></div><div><p className="text-xs text-gray-400">Reward</p><p className="text-2xl font-bold text-green-400">{goal.coinReward} 💰</p></div><div><p className="text-xs text-gray-400">Target Date</p><p className={`text-lg font-bold ${isOverdue?'text-red-400':daysLeft<=7?'text-orange-400':'text-blue-400'}`}>{isOverdue?`${Math.abs(daysLeft)}d overdue`:daysLeft===0?'Today!':`${daysLeft}d left`}</p></div></div>{!goal.completed&&(<div><div className="flex items-center justify-between mb-1"><p className="text-xs text-gray-400">Progress (cannot decrease)</p><p className="text-xs font-bold">{goal.progress}%</p></div><div className="h-2 bg-gray-800 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-500 to-cyan-500" style={{width:`${goal.progress}%`}}></div></div><input type="range" min="0" max="100" value={goal.progress} onChange={(e)=>updateGoalProgress(goal.id,parseInt(e.target.value))} className="w-full mt-2"/></div>)}</div><div className="flex flex-col gap-2">{goal.completed?(<div className="bg-green-600 px-6 py-3 rounded-xl font-bold text-center">✅ Done!</div>):(<button onClick={()=>completeGoal(goal.id)} className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 hover:opacity-90 transition-all">✓ Complete</button>)}<button onClick={()=>deleteGoal(goal.id)} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm">🗑️ Delete</button></div></div></div>);}))}
                                 </div>
                             </div>
                         </div>}
 
                         {showPrizeWheel&&<div key="wheel-modal" className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-90 p-4" style={{zIndex:999}}>
-                            <div className="bg-gray-800 rounded-2xl p-8 max-w-5xl w-full border-4 border-gradient-to-r from-orange-500 to-pink-600 animate-scaleIn max-h-screen overflow-y-auto scrollbar-hide">
+                            <div className="bg-gray-800 rounded-2xl p-8 max-w-5xl w-full border-4 border-gradient-to-r from-orange-500 to-pink-600 animate-scaleIn animate-card-pop max-h-screen overflow-y-auto scrollbar-hide">
                                 <div className="flex items-center justify-between mb-6">
                                     <h2 className="text-5xl font-bold flex items-center gap-2 bg-gradient-to-r from-orange-400 to-pink-600 bg-clip-text text-transparent">
                                         <Wheel/>
                                         <span>Prize Wheel</span>
                                     </h2>
-                                    <button onClick={()=>setShowPrizeWheel(false)} className="p-2 rounded-xl bg-gray-700 hover:bg-gray-600 transition-all">
+                                    <button onClick={()=>{setShowPrizeWheel(false);setShowWheelRewardModal(false);setWheelResult(null);}} className="p-2 rounded-xl bg-gray-700 hover:bg-gray-600 transition-all">
                                         <X/>
                                     </button>
                                 </div>
@@ -3407,8 +3834,22 @@
                                 <div className="bg-gradient-to-br from-orange-900 to-pink-900 bg-opacity-30 rounded-xl p-4 mb-6 border-2 border-orange-500">
                                     <p className="text-lg font-bold text-center text-yellow-300 mb-2">🎰 Try Your Luck!</p>
                                     <p className="text-sm text-center text-gray-300">Spin the wheel for mystery rewards! Higher tiers = Better prizes!</p>
-                                    <p className="text-xs text-center text-gray-400 mt-2">⚠️ Prizes are random and not shown anywhere - good luck!</p>
+                                    <p className="text-xs text-center text-gray-400 mt-2">✨ Prizes are random. After each spin, a reveal screen will show exactly what you won!</p>
                                 </div>
+
+                                {showWheelRewardModal&&wheelResult&&(
+                                    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/90 p-4 animate-fadeIn">
+                                        <div className="max-w-xl w-full bg-gradient-to-br from-gray-900 via-purple-900 to-black border-4 border-pink-500 rounded-3xl p-8 text-center animate-reward-burst shadow-2xl">
+                                            <p className="text-sm text-cyan-300 mb-2">🎰 Prize Revealed</p>
+                                            <h3 className="text-5xl font-black text-white mb-3 animate-mega-flash">{wheelResult.name}</h3>
+                                            <p className="text-lg text-pink-300 mb-6">Rarity: {wheelResult.rarity?.toUpperCase?.()||'SPECIAL'}</p>
+                                            <div className="bg-black/40 rounded-xl p-4 mb-6 text-gray-200">
+                                                <p>You won this reward from Tier {wheelTier} wheel.</p>
+                                            </div>
+                                            <button onClick={()=>setShowWheelRewardModal(false)} className="px-8 py-3 rounded-xl font-bold bg-gradient-to-r from-cyan-500 to-purple-600 hover:opacity-90 transition-all">Claim & Continue</button>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {wheelResult&&!wheelSpinning&&(
                                     <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl p-6 mb-6 text-center animate-scaleIn border-4 border-yellow-300 shadow-2xl">
@@ -3482,9 +3923,9 @@
                             </div>
                         </div>}
 
-                        {showAch&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4"><div className="bg-gray-800 rounded-2xl p-8 max-w-2xl w-full border border-gray-700 animate-scaleIn max-h-screen overflow-y-auto scrollbar-hide"><div className="flex items-center justify-between mb-6"><h2 className="text-4xl font-bold flex items-center gap-2"><Award/><span>Achievements ({achs.length}/{achList.length})</span></h2><button onClick={()=>setShowAch(false)} className="p-2 rounded-xl bg-gray-700 hover:bg-gray-600 transition-all"><X/></button></div><div className="space-y-3">{achList.map(a=>{const unlocked=achs.includes(a.id);return<div key={a.id} className={`bg-gray-700 rounded-xl p-4 flex items-center gap-4 ${unlocked?'border-2 border-yellow-500':'opacity-50'}`}><span className="text-5xl">{a.i}</span><div className="flex-1"><p className="font-bold text-lg">{a.n}</p><p className="text-sm text-gray-400">{a.d}</p><p className="text-yellow-400 text-sm font-bold">+{a.r} Coins</p></div>{unlocked&&<div className="text-green-400 font-bold text-xl">✓</div>}</div>})}</div></div></div>}
+                        {showAch&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4"><div className="bg-gray-800 rounded-2xl p-8 max-w-2xl w-full border border-gray-700 animate-scaleIn animate-card-pop max-h-screen overflow-y-auto scrollbar-hide"><div className="flex items-center justify-between mb-6"><h2 className="text-4xl font-bold flex items-center gap-2"><Award/><span>Achievements ({achs.length}/{achList.length})</span></h2><button onClick={()=>setShowAch(false)} className="p-2 rounded-xl bg-gray-700 hover:bg-gray-600 transition-all"><X/></button></div><div className="space-y-3">{achList.map(a=>{const unlocked=achs.includes(a.id);return<div key={a.id} className={`bg-gray-700 rounded-xl p-4 flex items-center gap-4 ${unlocked?'border-2 border-yellow-500':'opacity-50'}`}><span className="text-5xl">{a.i}</span><div className="flex-1"><p className="font-bold text-lg">{a.n}</p><p className="text-sm text-gray-400">{a.d}</p><p className="text-yellow-400 text-sm font-bold">+{a.r} Coins</p></div>{unlocked&&<div className="text-green-400 font-bold text-xl">✓</div>}</div>})}</div></div></div>}
 
-                        {showBattle&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4"><div className="bg-gray-800 rounded-2xl p-8 max-w-4xl w-full border-2 border-purple-500 animate-scaleIn max-h-screen overflow-y-auto scrollbar-hide"><div className="flex items-center justify-between mb-6"><h2 className="text-4xl font-bold flex items-center gap-2"><span>⚔️</span><span>Battle Arena</span></h2><button onClick={()=>setShowBattle(false)} className="p-2 rounded-xl bg-gray-700 hover:bg-gray-600 transition-all"><X/></button></div><div className="flex gap-2 mb-6 flex-wrap">{['friends','challenges','trading','leaderboard'].map(tab=><button key={tab} onClick={()=>setBattleTab(tab)} className={`px-4 py-2 rounded-lg font-bold capitalize transition-all ${battleTab===tab?'bg-purple-600':'bg-gray-700 hover:bg-gray-600'}`}>{tab==='friends'?'👥':tab==='challenges'?'🎯':tab==='trading'?'🤝':'🏆'} {tab}</button>)}</div><div className="min-h-96">{battleTab==='friends'&&<div><div className="bg-gray-700 rounded-xl p-4 mb-4"><h3 className="font-bold mb-3 flex items-center gap-2"><Plus/> Add Friend</h3><div className="flex gap-2"><input type="text" id="friendUsername" placeholder="Enter username..." className="flex-1 bg-gray-800 px-4 py-2 rounded-lg"/><button onClick={()=>{const input=document.getElementById('friendUsername');sendFriendRequest(input.value);input.value=''}} className="px-4 py-2 bg-purple-600 rounded-lg font-bold hover:bg-purple-500">Send Request</button></div></div>{friendRequests.length>0&&<div className="bg-gray-700 rounded-xl p-4 mb-4"><h3 className="font-bold mb-3">Friend Requests ({friendRequests.length})</h3><div className="space-y-2">{friendRequests.map(req=><div key={req.from} className="bg-gray-800 rounded-lg p-3 flex items-center justify-between"><span className="font-bold">{req.from}</span><div className="flex gap-2"><button onClick={()=>acceptFriendRequest(req.from)} className="px-3 py-1 bg-green-600 rounded font-bold text-sm">Accept</button><button onClick={()=>rejectFriendRequest(req.from)} className="px-3 py-1 bg-red-600 rounded font-bold text-sm">Reject</button></div></div>)}</div></div>}<div className="bg-gray-700 rounded-xl p-4"><h3 className="font-bold mb-3">Your Friends ({friends.length})</h3>{friends.length===0?<p className="text-gray-400 text-center py-4">No friends yet. Add some!</p>:<div className="space-y-2">{friends.map(friend=>{const friendData=S.get(`user-${friend}-data`);const fd=friendData?.value?JSON.parse(friendData.value):{};return<div key={friend} className="bg-gray-800 rounded-lg p-3 flex items-center justify-between"><div><p className="font-bold">{friend}</p><p className="text-xs text-gray-400">{tiers[fd.tier||0]?.name} Lv.{fd.lvl||1} • {(fd.totalXp||0).toLocaleString()} XP</p></div><button onClick={()=>removeFriend(friend)} className="px-3 py-1 bg-red-600 rounded font-bold text-sm">Remove</button></div>})}</div>}</div></div>}{battleTab==='challenges'&&<div><div className="bg-gray-700 rounded-xl p-4 mb-4"><h3 className="font-bold mb-3">Create Challenge</h3>{friends.length===0?<p className="text-gray-400">Add friends first!</p>:<div className="space-y-3"><select id="challengeFriend" className="w-full bg-gray-800 px-4 py-2 rounded-lg">{friends.map(f=><option key={f} value={f}>{f}</option>)}</select><div className="grid grid-cols-2 gap-3"><input type="number" id="taskGoal" placeholder="Task Goal" min="1" className="bg-gray-800 px-4 py-2 rounded-lg"/><input type="number" id="duration" placeholder="Days" min="1" max="30" className="bg-gray-800 px-4 py-2 rounded-lg"/></div><button onClick={()=>{const f=document.getElementById('challengeFriend').value;const g=document.getElementById('taskGoal').value;const d=document.getElementById('duration').value;if(g&&d)createChallenge(f,g,d)}} className="w-full px-4 py-2 bg-purple-600 rounded-lg font-bold hover:bg-purple-500">Create Challenge 🎯</button></div>}</div><div className="bg-gray-700 rounded-xl p-4"><h3 className="font-bold mb-3">Active Challenges ({challenges.filter(c=>c.status==='active').length})</h3><div className="space-y-3">{challenges.filter(c=>c.status==='active').map(c=>{const daysLeft=Math.ceil((c.endDate-Date.now())/(24*60*60*1000));const myProgress=c.challenger===user?c.challengerProgress:c.opponentProgress;const theirProgress=c.challenger===user?c.opponentProgress:c.challengerProgress;const opponent=c.challenger===user?c.opponent:c.challenger;return<div key={c.id} className="bg-gray-800 rounded-lg p-4"><div className="flex justify-between mb-2"><p className="font-bold">vs {opponent}</p><p className="text-sm text-gray-400">{daysLeft} days left</p></div><p className="text-sm mb-2">Goal: Complete {c.taskGoal} tasks</p><div className="space-y-1"><div className="flex justify-between text-xs"><span>You: {myProgress}/{c.taskGoal}</span><span>{Math.round(myProgress/c.taskGoal*100)}%</span></div><div className="h-2 bg-gray-700 rounded-full"><div className="h-full bg-purple-600 rounded-full" style={{width:`${Math.min(myProgress/c.taskGoal*100,100)}%`}}></div></div><div className="flex justify-between text-xs mt-2"><span>{opponent}: {theirProgress}/{c.taskGoal}</span><span>{Math.round(theirProgress/c.taskGoal*100)}%</span></div><div className="h-2 bg-gray-700 rounded-full"><div className="h-full bg-red-600 rounded-full" style={{width:`${Math.min(theirProgress/c.taskGoal*100,100)}%`}}></div></div></div></div>})}</div></div></div>}{battleTab==='trading'&&<div><div className="bg-gray-700 rounded-xl p-4 mb-4"><h3 className="font-bold mb-3">Create Trade Offer</h3>{friends.length===0?<p className="text-gray-400">Add friends first!</p>:<div className="space-y-3"><select id="tradeFriend" className="w-full bg-gray-800 px-4 py-2 rounded-lg">{friends.map(f=><option key={f} value={f}>{f}</option>)}</select><select id="myItem" className="w-full bg-gray-800 px-4 py-2 rounded-lg"><option value="">Select your item...</option>{shopItems.filter(item=>(item.type==='title'||item.type==='border')&&owned.includes(item.id)).map(item=><option key={item.id} value={item.id}>{item.n} ({rarities[item.rarity].n})</option>)}</select><select id="theirItem" className="w-full bg-gray-800 px-4 py-2 rounded-lg"><option value="">Select their item...</option>{shopItems.filter(item=>item.type==='title'||item.type==='border').map(item=><option key={item.id} value={item.id}>{item.n} ({rarities[item.rarity].n})</option>)}</select><button onClick={()=>{const f=document.getElementById('tradeFriend').value;const m=document.getElementById('myItem').value;const t=document.getElementById('theirItem').value;if(m&&t)createTradeOffer(f,m,t)}} className="w-full px-4 py-2 bg-purple-600 rounded-lg font-bold hover:bg-purple-500">Offer Trade 🤝</button><p className="text-xs text-gray-400 text-center">⚠️ Items must be within 1 rarity level</p></div>}</div><div className="bg-gray-700 rounded-xl p-4"><h3 className="font-bold mb-3">Trade Offers ({tradeOffers.length})</h3>{tradeOffers.length===0?<p className="text-gray-400 text-center py-4">No pending trades</p>:<div className="space-y-2">{tradeOffers.map(trade=>{const offerItem=shopItems.find(i=>i.id===trade.offerItem);const requestItem=shopItems.find(i=>i.id===trade.requestItem);return<div key={trade.id} className="bg-gray-800 rounded-lg p-3"><p className="font-bold mb-2">From: {trade.from}</p><div className="flex items-center justify-between mb-2"><div className="text-sm"><p>They offer: {offerItem?.n}</p><p className="text-xs text-gray-400">{rarities[offerItem?.rarity||0].n}</p></div><span>⇄</span><div className="text-sm"><p>You give: {requestItem?.n}</p><p className="text-xs text-gray-400">{rarities[requestItem?.rarity||0].n}</p></div></div><div className="flex gap-2"><button onClick={()=>acceptTrade(trade)} className="flex-1 px-3 py-1 bg-green-600 rounded font-bold text-sm">Accept</button><button onClick={()=>rejectTrade(trade.id)} className="flex-1 px-3 py-1 bg-red-600 rounded font-bold text-sm">Reject</button></div></div>})}</div>}</div></div>}{battleTab==='leaderboard'&&<div className="bg-gray-700 rounded-xl p-4"><h3 className="font-bold mb-3">🏆 Top Players</h3><p className="text-xs text-gray-400 mb-4">Top 3 players get bonus rewards weekly!</p><div className="space-y-2">{leaderboard.map((player,idx)=><div key={player.username} className={`rounded-lg p-3 flex items-center gap-3 ${idx<3?'bg-gradient-to-r from-yellow-900 to-orange-900 border-2 border-yellow-500':'bg-gray-800'}`}><div className={`text-2xl font-bold ${idx===0?'text-yellow-400':idx===1?'text-gray-300':idx===2?'text-orange-600':'text-gray-500'}`}>#{idx+1}</div><div className="flex-1"><p className={`font-bold ${player.username===user?'text-purple-400':''}`}>{player.username}{player.username===user?' (You)':''}</p><p className="text-xs text-gray-400">{tiers[player.tier]?.name} Lv.{player.level} • {player.totalXp.toLocaleString()} XP • {player.tasksCompleted} tasks</p></div>{idx<3&&<div className="text-2xl">{idx===0?'👑':idx===1?'🥈':'🥉'}</div>}</div>)}</div></div>}</div></div></div>}
+                        {showBattle&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4"><div className="bg-gray-800 rounded-2xl p-8 max-w-4xl w-full border-2 border-purple-500 animate-scaleIn animate-card-pop max-h-screen overflow-y-auto scrollbar-hide"><div className="flex items-center justify-between mb-6"><h2 className="text-4xl font-bold flex items-center gap-2"><span>⚔️</span><span>Battle Arena</span></h2><button onClick={()=>setShowBattle(false)} className="p-2 rounded-xl bg-gray-700 hover:bg-gray-600 transition-all"><X/></button></div><div className="flex gap-2 mb-6 flex-wrap">{['friends','challenges','trading','leaderboard'].map(tab=><button key={tab} onClick={()=>setBattleTab(tab)} className={`px-4 py-2 rounded-lg font-bold capitalize transition-all ${battleTab===tab?'bg-purple-600':'bg-gray-700 hover:bg-gray-600'}`}>{tab==='friends'?'👥':tab==='challenges'?'🎯':tab==='trading'?'🤝':'🏆'} {tab}</button>)}</div><div className="min-h-96">{battleTab==='friends'&&<div><div className="bg-gray-700 rounded-xl p-4 mb-4"><h3 className="font-bold mb-3 flex items-center gap-2"><Plus/> Add Friend</h3><div className="flex gap-2"><input type="text" id="friendUsername" placeholder="Enter username..." className="flex-1 bg-gray-800 px-4 py-2 rounded-lg"/><button onClick={()=>{const input=document.getElementById('friendUsername');sendFriendRequest(input.value);input.value=''}} className="px-4 py-2 bg-purple-600 rounded-lg font-bold hover:bg-purple-500">Send Request</button></div></div>{friendRequests.length>0&&<div className="bg-gray-700 rounded-xl p-4 mb-4"><h3 className="font-bold mb-3">Friend Requests ({friendRequests.length})</h3><div className="space-y-2">{friendRequests.map(req=><div key={req.from} className="bg-gray-800 rounded-lg p-3 flex items-center justify-between"><span className="font-bold">{req.from}</span><div className="flex gap-2"><button onClick={()=>acceptFriendRequest(req.from)} className="px-3 py-1 bg-green-600 rounded font-bold text-sm">Accept</button><button onClick={()=>rejectFriendRequest(req.from)} className="px-3 py-1 bg-red-600 rounded font-bold text-sm">Reject</button></div></div>)}</div></div>}<div className="bg-gray-700 rounded-xl p-4"><h3 className="font-bold mb-3">Your Friends ({friends.length})</h3>{friends.length===0?<p className="text-gray-400 text-center py-4">No friends yet. Add some!</p>:<div className="space-y-2">{friends.map(friend=>{const friendData=S.get(`user-${friend}-data`);const fd=friendData?.value?JSON.parse(friendData.value):{};return<div key={friend} className="bg-gray-800 rounded-lg p-3 flex items-center justify-between"><div><p className="font-bold">{friend}</p><p className="text-xs text-gray-400">{tiers[fd.tier||0]?.name} Lv.{fd.lvl||1} • {(fd.totalXp||0).toLocaleString()} XP</p></div><button onClick={()=>removeFriend(friend)} className="px-3 py-1 bg-red-600 rounded font-bold text-sm">Remove</button></div>})}</div>}</div></div>}{battleTab==='challenges'&&<div><div className="bg-gray-700 rounded-xl p-4 mb-4"><h3 className="font-bold mb-3">Create Challenge</h3>{friends.length===0?<p className="text-gray-400">Add friends first!</p>:<div className="space-y-3"><select id="challengeFriend" className="w-full bg-gray-800 px-4 py-2 rounded-lg">{friends.map(f=><option key={f} value={f}>{f}</option>)}</select><div className="grid grid-cols-2 gap-3"><input type="number" id="taskGoal" placeholder="Task Goal" min="1" className="bg-gray-800 px-4 py-2 rounded-lg"/><input type="number" id="duration" placeholder="Days" min="1" max="30" className="bg-gray-800 px-4 py-2 rounded-lg"/></div><button onClick={()=>{const f=document.getElementById('challengeFriend').value;const g=document.getElementById('taskGoal').value;const d=document.getElementById('duration').value;if(g&&d)createChallenge(f,g,d)}} className="w-full px-4 py-2 bg-purple-600 rounded-lg font-bold hover:bg-purple-500">Create Challenge 🎯</button></div>}</div><div className="bg-gray-700 rounded-xl p-4"><h3 className="font-bold mb-3">Active Challenges ({challenges.filter(c=>c.status==='active').length})</h3><div className="space-y-3">{challenges.filter(c=>c.status==='active').map(c=>{const daysLeft=Math.ceil((c.endDate-Date.now())/(24*60*60*1000));const myProgress=c.challenger===user?c.challengerProgress:c.opponentProgress;const theirProgress=c.challenger===user?c.opponentProgress:c.challengerProgress;const opponent=c.challenger===user?c.opponent:c.challenger;return<div key={c.id} className="bg-gray-800 rounded-lg p-4"><div className="flex justify-between mb-2"><p className="font-bold">vs {opponent}</p><p className="text-sm text-gray-400">{daysLeft} days left</p></div><p className="text-sm mb-2">Goal: Complete {c.taskGoal} tasks</p><div className="space-y-1"><div className="flex justify-between text-xs"><span>You: {myProgress}/{c.taskGoal}</span><span>{Math.round(myProgress/c.taskGoal*100)}%</span></div><div className="h-2 bg-gray-700 rounded-full"><div className="h-full bg-purple-600 rounded-full" style={{width:`${Math.min(myProgress/c.taskGoal*100,100)}%`}}></div></div><div className="flex justify-between text-xs mt-2"><span>{opponent}: {theirProgress}/{c.taskGoal}</span><span>{Math.round(theirProgress/c.taskGoal*100)}%</span></div><div className="h-2 bg-gray-700 rounded-full"><div className="h-full bg-red-600 rounded-full" style={{width:`${Math.min(theirProgress/c.taskGoal*100,100)}%`}}></div></div></div></div>})}</div></div></div>}{battleTab==='trading'&&<div><div className="bg-gray-700 rounded-xl p-4 mb-4"><h3 className="font-bold mb-3">Create Trade Offer</h3>{friends.length===0?<p className="text-gray-400">Add friends first!</p>:<div className="space-y-3"><select id="tradeFriend" className="w-full bg-gray-800 px-4 py-2 rounded-lg">{friends.map(f=><option key={f} value={f}>{f}</option>)}</select><select id="myItem" className="w-full bg-gray-800 px-4 py-2 rounded-lg"><option value="">Select your item...</option>{shopItems.filter(item=>(item.type==='title'||item.type==='border')&&owned.includes(item.id)).map(item=><option key={item.id} value={item.id}>{item.n} ({rarities[item.rarity].n})</option>)}</select><select id="theirItem" className="w-full bg-gray-800 px-4 py-2 rounded-lg"><option value="">Select their item...</option>{shopItems.filter(item=>item.type==='title'||item.type==='border').map(item=><option key={item.id} value={item.id}>{item.n} ({rarities[item.rarity].n})</option>)}</select><button onClick={()=>{const f=document.getElementById('tradeFriend').value;const m=document.getElementById('myItem').value;const t=document.getElementById('theirItem').value;if(m&&t)createTradeOffer(f,m,t)}} className="w-full px-4 py-2 bg-purple-600 rounded-lg font-bold hover:bg-purple-500">Offer Trade 🤝</button><p className="text-xs text-gray-400 text-center">⚠️ Items must be within 1 rarity level</p></div>}</div><div className="bg-gray-700 rounded-xl p-4"><h3 className="font-bold mb-3">Trade Offers ({tradeOffers.length})</h3>{tradeOffers.length===0?<p className="text-gray-400 text-center py-4">No pending trades</p>:<div className="space-y-2">{tradeOffers.map(trade=>{const offerItem=shopItems.find(i=>i.id===trade.offerItem);const requestItem=shopItems.find(i=>i.id===trade.requestItem);return<div key={trade.id} className="bg-gray-800 rounded-lg p-3"><p className="font-bold mb-2">From: {trade.from}</p><div className="flex items-center justify-between mb-2"><div className="text-sm"><p>They offer: {offerItem?.n}</p><p className="text-xs text-gray-400">{rarities[offerItem?.rarity||0].n}</p></div><span>⇄</span><div className="text-sm"><p>You give: {requestItem?.n}</p><p className="text-xs text-gray-400">{rarities[requestItem?.rarity||0].n}</p></div></div><div className="flex gap-2"><button onClick={()=>acceptTrade(trade)} className="flex-1 px-3 py-1 bg-green-600 rounded font-bold text-sm">Accept</button><button onClick={()=>rejectTrade(trade.id)} className="flex-1 px-3 py-1 bg-red-600 rounded font-bold text-sm">Reject</button></div></div>})}</div>}</div></div>}{battleTab==='leaderboard'&&<div className="bg-gray-700 rounded-xl p-4"><h3 className="font-bold mb-3">🏆 Top Players</h3><p className="text-xs text-gray-400 mb-4">Top 3 players get bonus rewards weekly!</p><div className="space-y-2">{leaderboard.map((player,idx)=><div key={player.username} className={`rounded-lg p-3 flex items-center gap-3 ${idx<3?'bg-gradient-to-r from-yellow-900 to-orange-900 border-2 border-yellow-500':'bg-gray-800'}`}><div className={`text-2xl font-bold ${idx===0?'text-yellow-400':idx===1?'text-gray-300':idx===2?'text-orange-600':'text-gray-500'}`}>#{idx+1}</div><div className="flex-1"><p className={`font-bold ${player.username===user?'text-purple-400':''}`}>{player.username}{player.username===user?' (You)':''}</p><p className="text-xs text-gray-400">{tiers[player.tier]?.name} Lv.{player.level} • {player.totalXp.toLocaleString()} XP • {player.tasksCompleted} tasks</p></div>{idx<3&&<div className="text-2xl">{idx===0?'👑':idx===1?'🥈':'🥉'}</div>}</div>)}</div></div>}</div></div></div>}
 
                         {showSettings&&(
                             <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-fadeIn" onClick={()=>setShowSettings(false)}>
@@ -3571,7 +4012,7 @@
                             </div>
                         )}
 
-                        {showSet&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4"><div className="bg-gray-800 rounded-2xl p-8 max-w-2xl w-full border border-gray-700 animate-scaleIn max-h-screen overflow-y-auto scrollbar-hide"><h2 className="text-3xl font-bold mb-6 flex items-center gap-2"><Settings/><span>Settings</span></h2><div className="space-y-4 mb-6"><div className="bg-gray-700 rounded-xl p-4"><div className="flex items-center gap-3 mb-2"><User/><span className="text-gray-400 text-sm">Username</span></div><p className="text-xl font-bold">{user}</p></div><div className="bg-gray-700 rounded-xl p-4"><div className="flex items-center gap-3 mb-2"><Trophy/><span className="text-gray-400 text-sm">Progress</span></div><p className="text-xl font-bold">{ct.name} - Level {lvl}</p><p className="text-sm text-gray-400 mt-1">{coins.toLocaleString()} Coins 💰</p></div><div className="bg-gray-700 rounded-xl p-4"><div className="flex items-center gap-3 mb-2"><Star/><span className="text-gray-400 text-sm">Stats</span></div><p className="text-lg">{stats.tasksCompleted} tasks • {stats.currentStreak} day streak</p><p className="text-sm text-gray-400">Best: {stats.longestStreak} days</p></div><div className="bg-gray-700 rounded-xl p-4"><div className="flex items-center gap-3 mb-2"><Clock/><span className="text-gray-400 text-sm">Activity Log (Last {activityLog.length})</span></div><div className="max-h-48 overflow-y-auto scrollbar-hide space-y-2 mt-2">{activityLog.length===0?<p className="text-gray-500 text-sm">No activity yet</p>:activityLog.slice(0,20).map((log,i)=><div key={i} className="bg-gray-800 rounded p-2 text-xs"><p className="text-gray-400">{log.date}</p><p className="text-white font-bold">{log.type==='task_completed'?`✅ ${log.details.task}`:log.type==='level_up'?`⬆️ Level ${log.details.level}`:log.type==='tier_up'?`🌟 ${log.details.tier}`:log.type}</p>{log.details.xp&&<p className="text-yellow-400">+{log.details.xp} XP, +{log.details.coins} Coins</p>}</div>)}</div></div></div><div className="space-y-3"><button onClick={exportUserData} className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-blue-500 to-cyan-500 hover:opacity-90 transition-all flex items-center justify-center gap-2"><Star/><span>Export Data</span></button><button onClick={logout} className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-orange-500 to-red-500 hover:opacity-90 transition-all flex items-center justify-center gap-2"><LogOut/><span>Logout</span></button><button onClick={deleteAcc} className="w-full py-3 rounded-xl font-bold bg-red-900 hover:bg-red-800 transition-all text-red-200">Delete Account</button><button onClick={()=>setShowSet(false)} className="w-full py-3 rounded-xl font-bold bg-gray-700 hover:bg-gray-600 transition-all">Close</button></div></div></div>}
+                        {showSet&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4"><div className="bg-gray-800 rounded-2xl p-8 max-w-2xl w-full border border-gray-700 animate-scaleIn animate-card-pop max-h-screen overflow-y-auto scrollbar-hide"><h2 className="text-3xl font-bold mb-6 flex items-center gap-2"><Settings/><span>Settings</span></h2><div className="space-y-4 mb-6"><div className="bg-gray-700 rounded-xl p-4"><div className="flex items-center gap-3 mb-2"><User/><span className="text-gray-400 text-sm">Username</span></div><p className="text-xl font-bold">{user}</p></div><div className="bg-gray-700 rounded-xl p-4"><div className="flex items-center gap-3 mb-2"><Trophy/><span className="text-gray-400 text-sm">Progress</span></div><p className="text-xl font-bold">{ct.name} - Level {lvl}</p><p className="text-sm text-gray-400 mt-1">{coins.toLocaleString()} Coins 💰</p></div><div className="bg-gray-700 rounded-xl p-4"><div className="flex items-center gap-3 mb-2"><Star/><span className="text-gray-400 text-sm">Stats</span></div><p className="text-lg">{stats.tasksCompleted} tasks • {stats.currentStreak} day streak</p><p className="text-sm text-gray-400">Best: {stats.longestStreak} days</p></div><div className="bg-gray-700 rounded-xl p-4"><div className="flex items-center gap-3 mb-2"><Clock/><span className="text-gray-400 text-sm">Activity Log (Last {activityLog.length})</span></div><div className="max-h-48 overflow-y-auto scrollbar-hide space-y-2 mt-2">{activityLog.length===0?<p className="text-gray-500 text-sm">No activity yet</p>:activityLog.slice(0,20).map((log,i)=><div key={i} className="bg-gray-800 rounded p-2 text-xs"><p className="text-gray-400">{log.date}</p><p className="text-white font-bold">{log.type==='task_completed'?`✅ ${log.details.task}`:log.type==='level_up'?`⬆️ Level ${log.details.level}`:log.type==='tier_up'?`🌟 ${log.details.tier}`:log.type}</p>{log.details.xp&&<p className="text-yellow-400">+{log.details.xp} XP, +{log.details.coins} Coins</p>}</div>)}</div></div></div><div className="space-y-3"><button onClick={exportUserData} className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-blue-500 to-cyan-500 hover:opacity-90 transition-all flex items-center justify-center gap-2"><Star/><span>Export Data</span></button><button onClick={logout} className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-orange-500 to-red-500 hover:opacity-90 transition-all flex items-center justify-center gap-2"><LogOut/><span>Logout</span></button><button onClick={deleteAcc} className="w-full py-3 rounded-xl font-bold bg-red-900 hover:bg-red-800 transition-all text-red-200">Delete Account</button><button onClick={()=>setShowSet(false)} className="w-full py-3 rounded-xl font-bold bg-gray-700 hover:bg-gray-600 transition-all">Close</button></div></div></div>}
 
                         <div className={`text-center mt-8 ${appTheme==='dark'?'text-gray-500':'text-gray-600'} text-sm`}><p>🔥 Keep grinding! Every task brings you closer to CELESTIAL tier! 💪</p></div>
                     </div>
