@@ -434,7 +434,9 @@
             const [showBattle,setShowBattle]=useState(false);
             const [battleTab,setBattleTab]=useState('friends');
             const [leaderboard,setLeaderboard]=useState([]);
+            const detectedTimeZone=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';
             const [countdownTick,setCountdownTick]=useState(0);
+            const [timeZone,setTimeZone]=useState(detectedTimeZone);
             const [editingTask,setEditingTask]=useState(null);
             const [showSeasonComplete,setShowSeasonComplete]=useState(null);
             const [musicEnabled,setMusicEnabled]=useState(false);
@@ -805,6 +807,7 @@
                     setHabits(data.habits||[]);
                     setGoals(data.goals||[]);
                     setTutorialCompleted(data.tutorialCompleted||false);
+                    setTimeZone(data.timeZone||detectedTimeZone);
                     
                     if(!primary?.value&&backup?.value){
                         S.set(`user-${u}-data`,backup.value);
@@ -829,7 +832,7 @@
                 const sanitizedBoosters=activeBoosters
                     .filter(b=>b&&b.expires>Date.now())
                     .map(b=>({...b,type:normalizeBoosterType(b.type)}));
-                const data={tasks,xp,totalXp,coins,lvl,tier,season,charIdx,theme,stats,owned,achs,activeBoosters:sanitizedBoosters,currentTitle,currentBorder,currentEffect,specialChars,customThemes,activityLog,friends,friendRequests,challenges,tradeOffers,habits,goals,tutorialCompleted};
+                const data={tasks,xp,totalXp,coins,lvl,tier,season,charIdx,theme,stats,owned,achs,activeBoosters:sanitizedBoosters,currentTitle,currentBorder,currentEffect,specialChars,customThemes,activityLog,friends,friendRequests,challenges,tradeOffers,habits,goals,tutorialCompleted,timeZone};
                 const payload=JSON.stringify(data);
                 S.set(`user-${user}-data`,payload);
                 S.set(`user-${user}-data-backup`,payload);
@@ -1146,6 +1149,7 @@ For production, this should be delivered by backend email service.`);
                 setCurrentBorder('');
                 setCurrentEffect('');
                 setSpecialChars([]);
+                setTimeZone(detectedTimeZone);
                 setAuthMode('welcome');
             };
 
@@ -1390,7 +1394,7 @@ For production, this should be delivered by backend email service.`);
             },[]);
 
             useEffect(()=>{if(user)checkStreaks()},[user]);
-            useEffect(()=>{if(user)saveData()},[tasks,xp,totalXp,coins,lvl,tier,season,charIdx,theme,stats,owned,achs,activeBoosters,currentTitle,currentBorder,currentEffect,specialChars,customThemes,activityLog,friends,friendRequests,challenges,tradeOffers,habits,goals,user]);
+            useEffect(()=>{if(user)saveData()},[tasks,xp,totalXp,coins,lvl,tier,season,charIdx,theme,stats,owned,achs,activeBoosters,currentTitle,currentBorder,currentEffect,specialChars,customThemes,activityLog,friends,friendRequests,challenges,tradeOffers,habits,goals,timeZone,user]);
             
             // Session timeout monitoring
             useEffect(()=>{
@@ -1526,8 +1530,60 @@ For production, this should be delivered by backend email service.`);
                 setTimeout(()=>setXpAnim(null),1000);
             };
             
+            const getSafeDate=(raw)=>{
+                const dt=new Date(raw);
+                return Number.isNaN(dt.getTime())?null:dt;
+            };
+
+            const getTimeZoneChoices=()=>{
+                const defaults=['UTC','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Toronto','Europe/London','Europe/Berlin','Europe/Paris','Europe/Madrid','Europe/Rome','Asia/Dubai','Asia/Kolkata','Asia/Bangkok','Asia/Singapore','Asia/Tokyo','Asia/Seoul','Australia/Sydney','Pacific/Auckland'];
+                try{
+                    if(typeof Intl.supportedValuesOf==='function'){
+                        const supported=Intl.supportedValuesOf('timeZone').filter(z=>defaults.includes(z));
+                        return Array.from(new Set([detectedTimeZone,...supported,...defaults])).sort((a,b)=>a.localeCompare(b));
+                    }
+                }catch(e){}
+                return Array.from(new Set([detectedTimeZone,...defaults])).sort((a,b)=>a.localeCompare(b));
+            };
+
+            const timeZoneChoices=getTimeZoneChoices();
+
+            const formatDateTimeInZone=(rawDate,opts={})=>{
+                const dt=getSafeDate(rawDate);
+                if(!dt)return 'Invalid date';
+                return new Intl.DateTimeFormat('en-US',{timeZone,year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',...opts}).format(dt);
+            };
+
+            const getDateKeyInZone=(rawDate)=>{
+                const dt=getSafeDate(rawDate);
+                if(!dt)return '';
+                return new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(dt);
+            };
+
+            const getLocalDateTimeInput=(rawDate)=>{
+                const dt=getSafeDate(rawDate);
+                if(!dt)return '';
+                const offset=dt.getTimezoneOffset();
+                const localDate=new Date(dt.getTime()-offset*60000);
+                return localDate.toISOString().slice(0,16);
+            };
+
+            const normalizeDueDate=(input)=>{
+                if(!input)return null;
+                const parsed=getSafeDate(input);
+                return parsed?parsed.toISOString():null;
+            };
+
+            const getTimezoneClock=()=>{
+                const now=new Date(countdownTick||Date.now());
+                const pretty=formatDateTimeInZone(now,{weekday:'long',year:'numeric',month:'long',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+                const shortZone=new Intl.DateTimeFormat('en-US',{timeZone,timeZoneName:'short'}).format(now).split(' ').pop();
+                return {pretty,shortZone};
+            };
+
             const logActivity=(type,details)=>{
-                const entry={type,details,timestamp:Date.now(),date:new Date().toLocaleString()};
+                const now=new Date();
+                const entry={type,details,timestamp:Date.now(),date:formatDateTimeInZone(now,{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})};
                 setActivityLog(prev=>[entry,...prev].slice(0,100)); // Keep last 100 entries
             };
 
@@ -1593,7 +1649,7 @@ For production, this should be delivered by backend email service.`);
                 
                 // Validate due date (can't be in the past)
                 if(newTask.dueDate){
-                    const dueTime=new Date(newTask.dueDate).getTime();
+                    const dueTime=(getSafeDate(newTask.dueDate)||new Date(0)).getTime();
                     if(dueTime<now){
                         const confirmPastDate=confirm(`⚠️ Due date is in the past\n\nCreate anyway?`);
                         if(!confirmPastDate)return;
@@ -1609,7 +1665,7 @@ For production, this should be delivered by backend email service.`);
                     completed:false,
                     createdAt:now,
                     canCompleteAt:now+getMinDuration(newTask.duration),
-                    dueDate:newTask.dueDate||null,
+                    dueDate:normalizeDueDate(newTask.dueDate),
                     priority:newTask.priority||3
                 }]);
                 setNewTask({title:'',difficulty:'medium',duration:'1hr',category:'personal',dueDate:'',priority:3});
@@ -1620,43 +1676,26 @@ For production, this should be delivered by backend email service.`);
 
             const getCountdown=(dueDate)=>{
                 if(!dueDate)return null;
-                const now=Date.now();
-                const due=new Date(dueDate).getTime();
-                const diff=due-now;
-                
-                if(diff<0){
-                    // Overdue
-                    const absDiff=Math.abs(diff);
-                    const seconds=Math.floor(absDiff/1000)%60;
-                    const minutes=Math.floor(absDiff/(1000*60))%60;
-                    const hours=Math.floor(absDiff/(1000*60*60))%24;
-                    const days=Math.floor(absDiff/(1000*60*60*24))%30;
-                    const months=Math.floor(absDiff/(1000*60*60*24*30))%12;
-                    const years=Math.floor(absDiff/(1000*60*60*24*365));
-                    return {overdue:true,years,months,days,hours,minutes,seconds};
-                }
-                
-                // Calculate time remaining
-                const seconds=Math.floor(diff/1000)%60;
-                const minutes=Math.floor(diff/(1000*60))%60;
-                const hours=Math.floor(diff/(1000*60*60))%24;
-                const days=Math.floor(diff/(1000*60*60*24))%30;
-                const months=Math.floor(diff/(1000*60*60*24*30))%12;
-                const years=Math.floor(diff/(1000*60*60*24*365));
-                
-                return {overdue:false,years,months,days,hours,minutes,seconds};
+                const due=getSafeDate(dueDate);
+                if(!due)return null;
+                const diffMs=due.getTime()-Date.now();
+                const overdue=diffMs<0;
+                const absSeconds=Math.floor(Math.abs(diffMs)/1000);
+                const days=Math.floor(absSeconds/86400);
+                const hours=Math.floor((absSeconds%86400)/3600);
+                const minutes=Math.floor((absSeconds%3600)/60);
+                const seconds=absSeconds%60;
+                return {overdue,days,hours,minutes,seconds,totalSeconds:absSeconds};
             };
 
             const formatCountdown=(countdown)=>{
                 if(!countdown)return'';
                 const parts=[];
-                if(countdown.years>0)parts.push(`${countdown.years}y`);
-                if(countdown.months>0)parts.push(`${countdown.months}mo`);
                 if(countdown.days>0)parts.push(`${countdown.days}d`);
-                if(countdown.hours>0)parts.push(`${countdown.hours}h`);
-                if(countdown.minutes>0)parts.push(`${countdown.minutes}m`);
-                if(countdown.seconds>0||parts.length===0)parts.push(`${countdown.seconds}s`);
-                return parts.slice(0,3).join(' ');
+                if(countdown.hours>0||countdown.days>0)parts.push(`${countdown.hours}h`);
+                if(countdown.minutes>0||countdown.days>0||countdown.hours>0)parts.push(`${countdown.minutes}m`);
+                parts.push(`${countdown.seconds}s`);
+                return parts.slice(0,4).join(' ');
             };
 
             const getPriorityColor=(priority)=>{
@@ -1875,7 +1914,7 @@ For production, this should be delivered by backend email service.`);
                     difficulty:t.difficulty,
                     duration:t.duration,
                     category:t.category,
-                    dueDate:t.dueDate||'',
+                    dueDate:getLocalDateTimeInput(t.dueDate),
                     priority:t.priority||3
                 });
                 
@@ -1898,7 +1937,7 @@ For production, this should be delivered by backend email service.`);
                     difficulty:newTask.difficulty,
                     duration:newTask.duration,
                     category:newTask.category,
-                    dueDate:newTask.dueDate||null,
+                    dueDate:normalizeDueDate(newTask.dueDate),
                     priority:newTask.priority||3,
                     xpRew:calcXp(newTask.difficulty,newTask.duration),
                     coinRew:calcCoins(newTask.difficulty)
@@ -3332,6 +3371,11 @@ ${item.xpBoost}x XP + ${item.coinBoost}x Coins for ${Math.round(item.duration/60
                                     <p className="text-cyan-200 text-sm font-bold uppercase tracking-wider">Homepage Command Center</p>
                                     <h2 className={`text-2xl md:text-3xl font-black bg-gradient-to-r ${ctheme.p} bg-clip-text text-transparent animate-text-sheen`}>Keep the streak alive, earn smarter rewards.</h2>
                                     <p className="text-gray-300 text-sm mt-1">Daily logins, honest goal tracking, and AI-scored missions are all active.</p>
+                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        <label className="text-xs text-cyan-200">Timezone</label>
+                                        <select value={timeZone} onChange={(e)=>setTimeZone(e.target.value)} className="bg-gray-900/70 border border-cyan-500/40 rounded-lg px-2 py-1 text-xs text-cyan-100">{timeZoneChoices.map(tz=><option key={tz} value={tz}>{tz}</option>)}</select>
+                                        <p className="text-xs text-gray-300">{getTimezoneClock().pretty} ({getTimezoneClock().shortZone})</p>
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-3 gap-2 text-center">
                                     <div className="bg-black/30 rounded-xl px-3 py-2"><p className="text-xs text-gray-400">Streak</p><p className="font-bold text-orange-300">{stats.currentStreak}d</p></div>
@@ -3339,6 +3383,19 @@ ${item.xpBoost}x XP + ${item.coinBoost}x Coins for ${Math.round(item.duration/60
                                     <div className="bg-black/30 rounded-xl px-3 py-2"><p className="text-xs text-gray-400">Reward x</p><p className="font-bold text-green-300">{getTaskRewardMultiplier().toFixed(2)}x</p></div>
                                 </div>
                             </div>
+                            <div className="relative z-10 mt-4 grid md:grid-cols-7 gap-2">{Array.from({length:7}).map((_,idx)=>{
+                                const base=new Date();
+                                const offset=idx-base.getDay();
+                                const day=new Date(base.getFullYear(),base.getMonth(),base.getDate()+offset);
+                                const key=getDateKeyInZone(day);
+                                const dueCount=tasks.filter(t=>t.dueDate&&getDateKeyInZone(t.dueDate)===key&&!t.completed).length;
+                                const isToday=key===getDateKeyInZone(new Date());
+                                return <div key={key} className={`rounded-xl border p-2 ${isToday?'border-cyan-400 bg-cyan-900/30':'border-gray-700 bg-black/25'}`}>
+                                    <p className="text-xs text-gray-400">{formatDateTimeInZone(day,{weekday:'short'})}</p>
+                                    <p className={`text-sm font-bold ${isToday?'text-cyan-200':'text-white'}`}>{formatDateTimeInZone(day,{day:'2-digit',month:'short'})}</p>
+                                    <p className="text-xs text-purple-200 mt-1">{dueCount} due</p>
+                                </div>;
+                            })}</div>
                         </div>
 
                         {activeBoosters.length>0&&<div className="mb-6 bg-gray-800/80 border border-cyan-500 rounded-2xl p-4">
@@ -3466,7 +3523,7 @@ ${item.xpBoost}x XP + ${item.coinBoost}x Coins for ${Math.round(item.duration/60
                                                                     {formatCountdown(countdown)}
                                                                 </p>
                                                                 <p className="text-xs text-gray-500 mt-1">
-                                                                    Due: {new Date(t.dueDate).toLocaleDateString()} {new Date(t.dueDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                                    Due: {formatDateTimeInZone(t.dueDate,{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'})} ({timeZone})
                                                                 </p>
                                                             </div>
                                                         )}
