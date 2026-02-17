@@ -376,10 +376,11 @@
             const [lastActivity,setLastActivity]=useState(Date.now());
             const [sessionTimeout,setSessionTimeout]=useState(null);
             const [authMode,setAuthMode]=useState('welcome');
-            const [authForm,setAuthForm]=useState({username:'',email:'',password:'',confirmPassword:''});
+            const [authForm,setAuthForm]=useState({username:'',email:'',password:'',confirmPassword:'',otp:''});
             const [showPass,setShowPass]=useState(false);
             const [authErr,setAuthErr]=useState('');
             const [resetMsg,setResetMsg]=useState('');
+            const [forgotOtpMeta,setForgotOtpMeta]=useState(null);
             const [tasks,setTasks]=useState([]);
             const [xp,setXp]=useState(0);
             const [totalXp,setTotalXp]=useState(0);
@@ -846,6 +847,54 @@
                 setActiveBoosters(prev=>prev.filter(b=>b&&b.expires>now).map(b=>({...b,type:normalizeBoosterType(b.type)})));
             };
 
+            const generateSecureOtp=()=>{
+                const arr=new Uint32Array(1);
+                window.crypto.getRandomValues(arr);
+                return String((arr[0]%900000)+100000).padStart(6,'0');
+            };
+
+            const generateOtpSalt=()=>{
+                const bytes=new Uint8Array(16);
+                window.crypto.getRandomValues(bytes);
+                return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+            };
+
+            const hashOtp=(otp,email,username,salt)=>hashPassword(`${otp}-${email}-${username}`,salt);
+
+            const getPasswordChecklist=(password)=>({
+                length:password&&password.length>=8,
+                upper:/[A-Z]/.test(password||''),
+                lower:/[a-z]/.test(password||''),
+                number:/[0-9]/.test(password||'')
+            });
+
+            const sendForgotOtp=()=>{
+                setAuthErr('');
+                setResetMsg('');
+                const username=sanitizeInput(authForm.username,20);
+                const email=sanitizeInput(authForm.email,120).toLowerCase();
+                if(!username||!email)return setAuthErr('Enter username and email first');
+
+                const acc=S.get(`user-${username}-account`);
+                if(!acc?.value)return setAuthErr('Account not found');
+                const a=JSON.parse(acc.value);
+                if((a.email||'').toLowerCase()!==email)return setAuthErr('Email doesn\'t match account');
+
+                if(forgotOtpMeta&&forgotOtpMeta.sentAt&&(Date.now()-forgotOtpMeta.sentAt)<60000){
+                    return setAuthErr('Please wait before requesting another OTP');
+                }
+
+                const otp=generateSecureOtp();
+                const salt=generateOtpSalt();
+                const expires=Date.now()+(10*60*1000);
+                const otpHash=hashOtp(otp,email,username,salt);
+                setForgotOtpMeta({otpHash,salt,expires,attempts:0,username,email,sentAt:Date.now()});
+                setResetMsg('✅ OTP generated. Check your email inbox (demo: OTP shown in popup). Expires in 10 minutes.');
+                alert(`🔐 Your secure OTP is: ${otp}
+
+For production, this should be delivered by backend email service.`);
+            };
+
             const signup=()=>{
                 setAuthErr('');
                 const username=sanitizeInput(authForm.username,20);
@@ -897,7 +946,7 @@
                 S.set(`user-${username}-account`,JSON.stringify(accountData));
                 S.set('current-user',username);
                 setUser(username);
-                setAuthForm({username:'',email:'',password:'',confirmPassword:''});
+                setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''});
                 
                 // Log signup
                 setTimeout(()=>{
@@ -952,7 +1001,7 @@
                 S.set('current-user',username);
                 setUser(username);
                 loadData(username);
-                setAuthForm({username:'',email:'',password:'',confirmPassword:''});
+                setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''});
                 
                 // Log login
                 setTimeout(()=>{
@@ -965,30 +1014,43 @@
                 setResetMsg('');
                 const username=sanitizeInput(authForm.username,20);
                 const email=sanitizeInput(authForm.email,120).toLowerCase();
-                
+                const otp=sanitizeInput(authForm.otp,10);
+
                 if(!username||!email)return setAuthErr('Enter username and email');
-                
-                // Validate new password
+                if(!otp||otp.length!==6)return setAuthErr('Enter the 6-digit OTP');
+
+                if(!forgotOtpMeta)return setAuthErr('Generate an OTP first');
+                if(forgotOtpMeta.username!==username||forgotOtpMeta.email!==email)return setAuthErr('OTP is tied to a different account request');
+                if(Date.now()>forgotOtpMeta.expires)return setAuthErr('OTP expired. Request a new OTP');
+                if((forgotOtpMeta.attempts||0)>=5)return setAuthErr('Too many OTP attempts. Request a new OTP');
+
+                const expectedHash=hashOtp(otp,email,username,forgotOtpMeta.salt);
+                if(expectedHash!==forgotOtpMeta.otpHash){
+                    setForgotOtpMeta(prev=>prev?{...prev,attempts:(prev.attempts||0)+1}:prev);
+                    return setAuthErr('Invalid OTP code');
+                }
+
                 const passwordCheck=validatePassword(authForm.password);
                 if(!passwordCheck.valid)return setAuthErr(passwordCheck.error);
-                
+
                 const acc=S.get(`user-${username}-account`);
                 if(!acc?.value)return setAuthErr('Account not found');
-                
+
                 const a=JSON.parse(acc.value);
                 if((a.email||'').toLowerCase()!==email)return setAuthErr('Email doesn\'t match account');
-                
-                // Hash new password
+
                 a.password=hashPassword(authForm.password);
                 a.passwordResetDate=new Date().toISOString();
+                a.passwordResetMethod='otp';
                 S.set(`user-${username}-account`,JSON.stringify(a));
-                
+
+                setForgotOtpMeta(null);
                 setResetMsg('✅ Password reset successfully! You can now login.');
                 setTimeout(()=>{
                     setAuthMode('login');
                     setResetMsg('');
-                    setAuthForm({username:'',email:'',password:'',confirmPassword:''});
-                },2500);
+                    setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''});
+                },2200);
             };
 
             const logout=()=>{
@@ -1336,7 +1398,7 @@
                             signup();
                         }
                         // Forgot password form
-                        else if(authMode==='forgot'&&authForm.username&&authForm.email&&authForm.password&&!user){
+                        else if(authMode==='forgot'&&authForm.username&&authForm.email&&authForm.password&&authForm.otp&&!user){
                             e.preventDefault();
                             forgotPass();
                         }
@@ -2761,19 +2823,19 @@ ${item.xpBoost}x XP + ${item.coinBoost}x Coins for ${Math.round(item.duration/60
                                 </div>
                             )}
                             {authMode==='login'&&(
-                                <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 animate-slideUp">
+                                <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 animate-slideUp animate-neon-pulse">
                                     <h2 className="text-3xl font-bold mb-6 text-center">Welcome Back</h2>
                                     {authErr&&<div className="bg-red-500 bg-opacity-20 border border-red-500 rounded-lg p-3 mb-4 text-red-200 text-sm">{authErr}</div>}
                                     <div className="space-y-4">
                                         <div><label className="block text-sm text-gray-400 mb-2">Username</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><User/></div><input type="text" value={authForm.username} onChange={(e)=>setAuthForm({...authForm,username:e.target.value})} onKeyPress={(e)=>e.key==='Enter'&&login()} className="w-full bg-gray-700 text-white pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Enter username"/></div></div>
                                         <div><label className="block text-sm text-gray-400 mb-2">Password</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><Lock/></div><input type={showPass?'text':'password'} value={authForm.password} onChange={(e)=>setAuthForm({...authForm,password:e.target.value})} onKeyPress={(e)=>e.key==='Enter'&&login()} className="w-full bg-gray-700 text-white pl-12 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Enter password"/><button onClick={()=>setShowPass(!showPass)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300">{showPass?<EyeOff/>:<Eye/>}</button></div></div>
                                         <button onClick={login} className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 transition-all transform hover:scale-105 shadow-lg">Login</button>
-                                        <div className="text-center space-y-2"><button onClick={()=>{setAuthMode('forgot');setAuthErr('');setAuthForm({username:'',email:'',password:'',confirmPassword:''})}} className="text-cyan-400 hover:text-cyan-300 text-sm">Forgot Password?</button><div className="text-gray-500 text-sm">Don't have an account? <button onClick={()=>{setAuthMode('signup');setAuthErr('');setAuthForm({username:'',email:'',password:'',confirmPassword:''})}} className="text-purple-400 hover:text-purple-300">Sign Up</button></div></div>
+                                        <div className="text-center space-y-2"><button onClick={()=>{setAuthMode('forgot');setAuthErr('');setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''})}} className="text-cyan-400 hover:text-cyan-300 text-sm">Forgot Password?</button><div className="text-gray-500 text-sm">Don't have an account? <button onClick={()=>{setAuthMode('signup');setAuthErr('');setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''})}} className="text-purple-400 hover:text-purple-300">Sign Up</button></div></div>
                                     </div>
                                 </div>
                             )}
                             {authMode==='signup'&&(
-                                <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 animate-slideUp">
+                                <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 animate-slideUp animate-neon-pulse">
                                     <h2 className="text-3xl font-bold mb-6 text-center">Create Account</h2>
                                     {authErr&&<div className="bg-red-500 bg-opacity-20 border border-red-500 rounded-lg p-3 mb-4 text-red-200 text-sm">{authErr}</div>}
                                     <div className="space-y-4">
@@ -2782,21 +2844,27 @@ ${item.xpBoost}x XP + ${item.coinBoost}x Coins for ${Math.round(item.duration/60
                                         <div><label className="block text-sm text-gray-400 mb-2">Password</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><Lock/></div><input type={showPass?'text':'password'} value={authForm.password} onChange={(e)=>setAuthForm({...authForm,password:e.target.value})} className="w-full bg-gray-700 text-white pl-12 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Min 6 characters"/><button onClick={()=>setShowPass(!showPass)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300">{showPass?<EyeOff/>:<Eye/>}</button></div></div>
                                         <div><label className="block text-sm text-gray-400 mb-2">Confirm Password</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><Lock/></div><input type={showPass?'text':'password'} value={authForm.confirmPassword} onChange={(e)=>setAuthForm({...authForm,confirmPassword:e.target.value})} onKeyPress={(e)=>e.key==='Enter'&&signup()} className="w-full bg-gray-700 text-white pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Confirm password"/></div></div>
                                         <button onClick={signup} className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 transition-all transform hover:scale-105 shadow-lg">Create Account</button>
-                                        <div className="text-center text-gray-500 text-sm">Already have account? <button onClick={()=>{setAuthMode('login');setAuthErr('');setAuthForm({username:'',email:'',password:'',confirmPassword:''})}} className="text-cyan-400 hover:text-cyan-300">Login</button></div>
+                                        <div className="text-center text-gray-500 text-sm">Already have account? <button onClick={()=>{setAuthMode('login');setAuthErr('');setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''})}} className="text-cyan-400 hover:text-cyan-300">Login</button></div>
                                     </div>
                                 </div>
                             )}
                             {authMode==='forgot'&&(
-                                <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 animate-slideUp">
-                                    <h2 className="text-3xl font-bold mb-6 text-center">Reset Password</h2>
+                                <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 animate-slideUp animate-neon-pulse">
+                                    <h2 className="text-3xl font-bold mb-2 text-center">Reset Password with OTP</h2>
+                                    <p className="text-center text-gray-400 text-sm mb-6">Request OTP, verify it, then set your new password.</p>
                                     {authErr&&<div className="bg-red-500 bg-opacity-20 border border-red-500 rounded-lg p-3 mb-4 text-red-200 text-sm">{authErr}</div>}
                                     {resetMsg&&<div className="bg-green-500 bg-opacity-20 border border-green-500 rounded-lg p-3 mb-4 text-green-200 text-sm">{resetMsg}</div>}
                                     <div className="space-y-4">
                                         <div><label className="block text-sm text-gray-400 mb-2">Username</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><User/></div><input type="text" value={authForm.username} onChange={(e)=>setAuthForm({...authForm,username:e.target.value})} className="w-full bg-gray-700 text-white pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Your username"/></div></div>
                                         <div><label className="block text-sm text-gray-400 mb-2">Email</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><Mail/></div><input type="email" value={authForm.email} onChange={(e)=>setAuthForm({...authForm,email:e.target.value})} className="w-full bg-gray-700 text-white pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Your email"/></div></div>
-                                        <div><label className="block text-sm text-gray-400 mb-2">New Password</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><Lock/></div><input type={showPass?'text':'password'} value={authForm.password} onChange={(e)=>setAuthForm({...authForm,password:e.target.value})} onKeyPress={(e)=>e.key==='Enter'&&forgotPass()} className="w-full bg-gray-700 text-white pl-12 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="New password"/><button onClick={()=>setShowPass(!showPass)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300">{showPass?<EyeOff/>:<Eye/>}</button></div></div>
-                                        <button onClick={forgotPass} className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 transition-all transform hover:scale-105 shadow-lg">Reset Password</button>
-                                        <div className="text-center text-gray-500 text-sm">Remember password? <button onClick={()=>{setAuthMode('login');setAuthErr('');setResetMsg('');setAuthForm({username:'',email:'',password:'',confirmPassword:''})}} className="text-cyan-400 hover:text-cyan-300">Login</button></div>
+                                        <button onClick={sendForgotOtp} className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-90 transition-all transform hover:scale-105 shadow-lg">Send Secure OTP</button>
+                                        <div><label className="block text-sm text-gray-400 mb-2">OTP Code</label><input type="text" maxLength="6" value={authForm.otp||''} onChange={(e)=>setAuthForm({...authForm,otp:e.target.value.replace(/\D/g,'')})} className="w-full bg-gray-700 text-white px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 tracking-[0.35em] text-center font-bold" placeholder="000000"/></div>
+                                        <div><label className="block text-sm text-gray-400 mb-2">New Password</label><div className="relative"><div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"><Lock/></div><input type={showPass?'text':'password'} value={authForm.password} onChange={(e)=>setAuthForm({...authForm,password:e.target.value})} onKeyPress={(e)=>e.key==='Enter'&&forgotPass()} className="w-full bg-gray-700 text-white pl-12 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="New secure password"/><button onClick={()=>setShowPass(!showPass)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300">{showPass?<EyeOff/>:<Eye/>}</button></div></div>
+                                        <div className="bg-gray-900 rounded-lg p-3 text-xs grid grid-cols-2 gap-2">
+                                            {Object.entries(getPasswordChecklist(authForm.password)).map(([k,v])=><p key={k} className={v?'text-green-400':'text-gray-500'}>{v?'✅':'•'} {k==='length'?'8+ chars':k==='upper'?'Uppercase':k==='lower'?'Lowercase':'Number'}</p>)}
+                                        </div>
+                                        <button onClick={forgotPass} className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 transition-all transform hover:scale-105 shadow-lg">Verify OTP & Reset Password</button>
+                                        <div className="text-center text-gray-500 text-sm">Remember password? <button onClick={()=>{setAuthMode('login');setAuthErr('');setResetMsg('');setForgotOtpMeta(null);setAuthForm({username:'',email:'',password:'',confirmPassword:'',otp:''})}} className="text-cyan-400 hover:text-cyan-300">Login</button></div>
                                     </div>
                                 </div>
                             )}
